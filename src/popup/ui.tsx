@@ -98,6 +98,45 @@ export function Notice({ tone, children }: { tone: 'bad' | 'good' | ''; children
   );
 }
 
+export function RangeField({
+  label,
+  value,
+  min,
+  max,
+  step,
+  display,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  display: string;
+  onChange: (value: number) => void;
+}) {
+  const fill = ((value - min) / (max - min)) * 100;
+  return (
+    <div class="field">
+      <span class="rowline">
+        <span>{label}</span>
+        <span class="spacer" />
+        <b class="range-value">{display}</b>
+      </span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        aria-label={label}
+        style={`--fill:${fill}%`}
+        onInput={(event) => onChange(event.currentTarget.valueAsNumber)}
+      />
+    </div>
+  );
+}
+
 /** A number field a reader can clear. The DOM reports NaN for an empty input,
  *  which is not a value worth writing anywhere. */
 export function NumberField({

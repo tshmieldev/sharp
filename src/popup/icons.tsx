@@ -20,8 +20,6 @@ function icon(children: JSX.Element, extra?: Partial<IconProps>) {
   );
 }
 
-/** The gap in the middle bar is the filter: something did not get through. */
-export const Mark = icon(<path d="M4 6.5h16M6.5 12h3.2M14.3 12h3.2M9 17.5h6" />);
 export const Search = icon(
   <path d="M10.8 4.5a6.3 6.3 0 1 0 0 12.6 6.3 6.3 0 0 0 0-12.6ZM15.4 15.4 20 20" />,
 );

@@ -22,6 +22,12 @@ type RecordState = {
 // visible text without making it a different post, and a decided post must
 // never be paid for twice.
 const identity = (post: Post) => post.key;
+const SCAN_INTERVAL = 100;
+const POLL_INTERVAL = 200;
+// A batch leaves as soon as it is full; this only bounds how long a partial one
+// waits for stragglers. Requests then overlap up to the in-flight ceiling.
+const BATCH_WINDOW = 200;
+const MAX_IN_FLIGHT = 3;
 
 /** Owns the tab lifecycle. A post has one state, independent of recycled DOM nodes. */
 export class TimelineController {
@@ -34,9 +40,10 @@ export class TimelineController {
   private openedAt = 0;
   private generation = 0;
   private refreshing = 0;
-  private busy = false;
+  private inFlight = 0;
   private stopped = false;
   private scanTimer = 0;
+  private scannedAt = 0;
   private batchTimer = 0;
   private pollTimer = 0;
   private observer: MutationObserver | null = null;
@@ -67,7 +74,7 @@ export class TimelineController {
       attributeFilter: ['href', 'src', 'poster'],
     });
     // Also covers SPA navigation, delayed focal posts and retry deadlines.
-    this.pollTimer = window.setInterval(() => this.scan(), 800);
+    this.pollTimer = window.setInterval(() => this.scan(), POLL_INTERVAL);
     chrome.storage?.onChanged?.addListener(this.onStorage);
     window.addEventListener('pagehide', this.onPageHide);
     window.addEventListener('pageshow', this.onPageShow);
@@ -125,16 +132,22 @@ export class TimelineController {
 
   getSettings = () => (this.stopped ? null : this.settings);
 
+  /** Throttle, not debounce: a burst of mutations scans immediately and then at
+   *  most once per interval, so a continuous stream can never starve it. */
   private scheduleScan() {
-    if (this.scanTimer || this.stopped) return;
+    if (this.stopped) return;
+    const wait = this.scannedAt + SCAN_INTERVAL - Date.now();
+    if (wait <= 0) return this.scan();
+    if (this.scanTimer) return;
     this.scanTimer = window.setTimeout(() => {
       this.scanTimer = 0;
       this.scan();
-    }, 100);
+    }, wait);
   }
 
   scan() {
     if (this.stopped || !this.settings || !this.rules) return;
+    this.scannedAt = Date.now();
     this.threadControl.update(this.settings);
     if (this.path !== location.pathname) {
       this.path = location.pathname;
@@ -186,7 +199,11 @@ export class TimelineController {
       }
       const verdict = record.phase.type === 'decided' ? record.phase.verdict : null;
       // An undecided post far from the fold is left exactly as X drew it.
-      if (decision === 'ai' && !verdict && !extract.nearViewport(article)) {
+      if (
+        decision === 'ai' &&
+        !verdict &&
+        !extract.nearViewport(article, this.settings.lookahead)
+      ) {
         apply({ kind: 'show' });
         continue;
       }
@@ -216,16 +233,21 @@ export class TimelineController {
         if (this.records.size <= 1000) break;
       }
     }
-    if (!this.batchTimer && !this.busy) {
-      this.batchTimer = window.setTimeout(() => {
-        this.batchTimer = 0;
-        void this.flush();
-      }, 300);
-    }
+    this.scheduleFlush();
   }
 
-  private async flush() {
-    if (this.busy || this.stopped || !this.settings || !this.rules) return;
+  private scheduleFlush(delay = BATCH_WINDOW) {
+    if (this.stopped || this.batchTimer || this.inFlight >= MAX_IN_FLIGHT) return;
+    this.batchTimer = window.setTimeout(() => {
+      this.batchTimer = 0;
+      this.flush();
+    }, delay);
+  }
+
+  /** Fills a batch and hands it off without waiting for the answer. A full batch
+   *  starts the next one immediately; a partial one waits out the window. */
+  private flush() {
+    if (this.stopped || !this.settings || !this.rules || this.inFlight >= MAX_IN_FLIGHT) return;
     const thread = extract.currentThread();
     const focal = extract.focalArticle(thread);
     if (thread && !focal && Date.now() - this.openedAt < 2500) return;
@@ -240,7 +262,7 @@ export class TimelineController {
         this.settings.analyzeImages ? this.settings.maxImagesPerPost : 0,
         focal,
       );
-      if (!post || !extract.nearViewport(article)) continue;
+      if (!post || !extract.nearViewport(article, this.settings.lookahead)) continue;
       const key = identity(post);
       const record = this.records.get(key);
       if (
@@ -266,24 +288,37 @@ export class TimelineController {
       if (selected.size >= limit) break;
     }
     if (!selected.size) return;
-    this.busy = true;
     const generation = this.generation;
     for (const record of selected.values()) {
       record.phase = { type: 'running' };
       record.attempts++;
     }
-    let results: readonly Verdict[] = [];
-    try {
-      results = await this.send({
-        type: 'EVALUATE',
-        scope: decisionScope(this.settings),
-        items: [...selected.values()].map((record) => record.post),
+    this.inFlight++;
+    void this.send({
+      type: 'EVALUATE',
+      scope: decisionScope(this.settings),
+      items: [...selected.values()].map((record) => record.post),
+    })
+      .then(
+        (results) => this.settle(selected, results, generation),
+        () => {
+          if (!chrome.runtime.id) this.stop();
+          this.settle(selected, [], generation);
+        },
+      )
+      .finally(() => {
+        this.inFlight--;
+        this.scheduleFlush(0);
       });
-    } catch {
-      if (!chrome.runtime.id) this.stop();
-    } finally {
-      this.busy = false;
-    }
+    // The queue had at least a full batch in it, so there is probably more.
+    if (selected.size >= limit) this.scheduleFlush(0);
+  }
+
+  private settle(
+    selected: Map<string, RecordState>,
+    results: readonly Verdict[],
+    generation: number,
+  ) {
     if (this.stopped || generation !== this.generation) {
       this.scheduleScan();
       return;

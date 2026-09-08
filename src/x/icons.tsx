@@ -16,8 +16,14 @@ const svg = (props: JSX.SVGAttributes<SVGSVGElement>, path: JSX.Element) => (
   </svg>
 );
 
-export const Mark = (props: JSX.SVGAttributes<SVGSVGElement>) =>
-  svg({ class: 'aitf-mark', ...props }, <path d="M4 6.5h16M6.5 12h3.2M14.3 12h3.2M9 17.5h6" />);
+/** The gavel, filled rather than stroked, from brand/sharp.svg. */
+export const Mark = (props: JSX.SVGAttributes<SVGSVGElement>) => (
+  <svg viewBox="0 0 100 100" fill="currentColor" aria-hidden="true" class="aitf-mark" {...props}>
+    <path d="M43 17 51 14.5 66.5 30 64 38Z" />
+    <path d="M43.3 22.2 58.6 37.4 52 44 86.5 75.2 87 83.2 78.5 82.8 47.2 48.5 40 55.5 24.8 40.8Z" />
+    <path d="M19.5 40 40.5 60.7 32.7 63.2 17.1 48Z" />
+  </svg>
+);
 
 export const ShieldCheck = (props: JSX.SVGAttributes<SVGSVGElement>) =>
   svg(

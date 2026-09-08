@@ -205,9 +205,14 @@ html[data-aitf-motion='reduced'] .aitf-glow i {
 }
 .aitf-mark {
   flex: none;
-  width: 17px;
-  height: 17px;
+  width: 20px;
+  height: 20px;
   opacity: 0.5;
+}
+.aitf-pill .aitf-mark {
+  width: 20px;
+  height: 20px;
+  opacity: 0.7;
 }
 .aitf-banner-text {
   display: flex;

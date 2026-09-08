@@ -120,13 +120,14 @@ export function describe(article: Element, imageLimit: number, focal: Element | 
   };
 }
 
-/** X mounts far more posts than it shows. Only touch the ones the reader is at
- *  or scrolling towards: collapsing anything above the fold moves the page under
- *  them, and X re-measures the whole column when a cell changes height. */
-export function nearViewport(article: Element): boolean {
+/** X mounts far more posts than it shows, and judging all of them costs money
+ *  for posts nobody reaches. The runway either side of the viewport is the
+ *  reader's own lookahead setting, as a percentage of a screen. */
+export function nearViewport(article: Element, lookahead: number): boolean {
   const rect = article.getBoundingClientRect();
-  const height = window.innerHeight || 800;
-  return rect.bottom > 0 && rect.top < height * 2;
+  const viewport = window.innerHeight || 800;
+  const margin = (viewport * lookahead) / 100;
+  return rect.bottom > -margin && rect.top < viewport + margin;
 }
 
 export const currentThread = () => threadId(location.pathname);

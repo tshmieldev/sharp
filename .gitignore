@@ -1,6 +1,5 @@
 node_modules/
 .delta/
-dist/
 coverage/
 /background.js
 /content.js
@@ -12,3 +11,6 @@ coverage/
 .env
 .env.*
 .DS_Store
+.release/
+/sharp-*.zip
+/logo-round*.png

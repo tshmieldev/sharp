@@ -1,6 +1,6 @@
 {
   "name": "ai-twitter-filter",
-  "version": "2.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "packageManager": "bun@1.3.10",
@@ -10,6 +10,7 @@
   "trustedDependencies": [],
   "scripts": {
     "build": "bun scripts/build.mjs",
+    "release": "bun scripts/release.mjs",
     "dev": "bun scripts/build.mjs --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

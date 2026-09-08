@@ -36,61 +36,67 @@ export function createEvaluator(runClassification = classify) {
   });
   const clear = lock.withPermits(1)(attempt(() => chrome.storage.local.remove(CACHE_KEY)));
 
+  /** The lock covers the cache read and the cache write, never the provider
+   *  call, so requests overlap. The merge re-reads under the lock rather than
+   *  writing back the snapshot it started from, so overlapping batches cannot
+   *  drop each other's verdicts. */
   function evaluate(settings: Settings, posts: readonly Post[]) {
-    return lock
-      .withPermits(1)(
-        Effect.gen(function* () {
-          const cache = yield* load;
-          const now = Date.now();
-          const keys = yield* Effect.forEach(posts, (post) => cacheKey(settings, post));
-          const unique = new Map<string, Post>();
-          posts.forEach((post, index) => {
-            const key = keys[index]!;
-            if (!cache[key] || now - cache[key].at > TTL) unique.set(key, post);
-          });
-          const updates: Record<string, typeof CacheEntry.Type> = {};
-          if (unique.size) {
-            // A paid request is never automatically retried here. The content controller
-            // owns a bounded retry budget and leaves the timeline visible on failure.
-            yield* bumpStats({ requests: 1 });
-            const result = yield* runClassification(settings, [...unique.values()]).pipe(
-              Effect.tapError((error) =>
-                bumpStats({
-                  tokens: 'tokens' in error && typeof error.tokens === 'number' ? error.tokens : 0,
-                }),
-              ),
-            );
-            yield* bumpStats({ tokens: result.tokens });
-            const byId = new Map(result.verdicts.map((verdict) => [verdict.key, verdict]));
-            for (const [key, post] of unique) {
-              const verdict = byId.get(post.key);
-              if (verdict && !verdict.failed)
-                updates[key] = { hide: verdict.hide, reason: verdict.reason, at: now };
-            }
+    return Effect.gen(function* () {
+      const keys = yield* Effect.forEach(posts, (post) => cacheKey(settings, post));
+      const cache = yield* lock.withPermits(1)(load);
+      const now = Date.now();
+      const unique = new Map<string, Post>();
+      posts.forEach((post, index) => {
+        const key = keys[index]!;
+        if (!cache[key] || now - cache[key].at > TTL) unique.set(key, post);
+      });
+      const updates: Record<string, typeof CacheEntry.Type> = {};
+      if (unique.size) {
+        // A paid request is never automatically retried here. The content controller
+        // owns a bounded retry budget and leaves the timeline visible on failure.
+        yield* bumpStats({ requests: 1 });
+        const result = yield* runClassification(settings, [...unique.values()]).pipe(
+          Effect.tapError((error) =>
+            bumpStats({
+              tokens: 'tokens' in error && typeof error.tokens === 'number' ? error.tokens : 0,
+            }),
+          ),
+        );
+        yield* bumpStats({ tokens: result.tokens });
+        const byId = new Map(result.verdicts.map((verdict) => [verdict.key, verdict]));
+        for (const [key, post] of unique) {
+          const verdict = byId.get(post.key);
+          if (verdict && !verdict.failed)
+            updates[key] = { hide: verdict.hide, reason: verdict.reason, at: now };
+        }
+        yield* lock.withPermits(1)(
+          Effect.gen(function* () {
+            const current = yield* load;
             const next = Object.fromEntries(
-              Object.entries({ ...cache, ...updates })
+              Object.entries({ ...current, ...updates })
                 .filter(([, entry]) => now - entry.at <= TTL)
                 .sort((a, b) => b[1].at - a[1].at)
                 .slice(0, LIMIT),
             );
             yield* writeLocal({ [CACHE_KEY]: next });
-            yield* setStatus(
-              result.verdicts.some((verdict) => verdict.failed)
-                ? 'The model skipped some posts. They remain visible.'
-                : '',
-            );
-          }
-          return posts.map((post, index): Verdict => {
-            const key = keys[index]!;
-            const entry = updates[key] ?? cache[key];
-            return entry && now - entry.at <= TTL
-              ? { key: post.key, hide: entry.hide, reason: entry.reason }
-              : { key: post.key, hide: false, reason: '', failed: true };
-          });
-        }),
-      )
-      .pipe(Effect.timeout('32 seconds'));
+          }),
+        );
+        yield* setStatus(
+          result.verdicts.some((verdict) => verdict.failed)
+            ? 'The model skipped some posts. They remain visible.'
+            : '',
+        );
+      }
+      return posts.map((post, index): Verdict => {
+        const key = keys[index]!;
+        const entry = updates[key] ?? cache[key];
+        return entry && now - entry.at <= TTL
+          ? { key: post.key, hide: entry.hide, reason: entry.reason }
+          : { key: post.key, hide: false, reason: '', failed: true };
+      });
+    }).pipe(Effect.timeout('32 seconds'));
   }
+
   return {
     evaluate,
     clear,

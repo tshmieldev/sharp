@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import type { Stats } from '../common/messages';
 import { Alert, ChevronRight, Close } from './icons';
 import { lists, type ListKey } from './ListSheet';
-import { ToggleRow, type SettingsEditor } from './ui';
+import { RangeField, ToggleRow, type SettingsEditor } from './ui';
 
 export type XTab = 'filtering' | 'rules' | 'activity';
 
@@ -304,6 +304,24 @@ export function XPanel({
             </div>
           </>
         )}
+      </section>
+
+      <section class="group">
+        <h2>Lookahead</h2>
+        <RangeField
+          label="Judge posts within"
+          min={0}
+          max={500}
+          step={25}
+          value={settings.lookahead}
+          display={`${settings.lookahead}vh`}
+          onChange={(next) => update('lookahead', next)}
+        />
+        <p class="note tight">
+          {settings.lookahead === 0
+            ? 'Only posts on screen are judged, so you will watch them resolve.'
+            : `Posts within ${settings.lookahead / 100} screens of the viewport are judged early, so most have settled before you reach them. Higher costs more requests.`}
+        </p>
       </section>
 
       <section class="group">
