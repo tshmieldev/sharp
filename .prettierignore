@@ -1,0 +1,12 @@
+node_modules
+.delta
+dist
+coverage
+bun.lock
+/background.js
+/content.js
+/content.css
+/popup.js
+/popup.css
+/popup.html
+.worktree-backup

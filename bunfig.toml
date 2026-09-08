@@ -1,0 +1,3 @@
+[run]
+# Run tool binaries with Bun rather than following their Node.js shebangs.
+bun = true

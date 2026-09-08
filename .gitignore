@@ -1,0 +1,14 @@
+node_modules/
+.delta/
+dist/
+coverage/
+/background.js
+/content.js
+/content.css
+/popup.js
+/popup.css
+/popup.html
+.worktree-backup/
+.env
+.env.*
+.DS_Store
