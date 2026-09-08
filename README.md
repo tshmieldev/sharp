@@ -71,5 +71,5 @@ thread you're reading.
 Found a bug? [Open an issue](https://github.com/tshmieldev/sharp/issues).
 Building on it? See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-[Privacy policy](privacy-policy.md) · Licensed under
-[AGPL-3.0](LICENSE) · Copyright © 2026 tshmieldev
+[Privacy policy](privacy-policy.md) · [MIT licensed](LICENSE) ·
+Copyright © 2026 tshmieldev
