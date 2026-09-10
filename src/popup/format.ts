@@ -25,6 +25,14 @@ export const uptime = (value: number | undefined) =>
 export const kilobytes = (bytes: number) =>
   bytes < 1024 ? `${bytes} B` : `${Math.round(bytes / 1024).toLocaleString()} KB`;
 
+/** Coarse on purpose: this is an estimate, not a stopwatch. */
+export function duration(seconds: number): string {
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)} min`;
+  const hours = seconds / 3600;
+  return `${hours < 10 ? hours.toFixed(1).replace(/\.0$/, '') : Math.round(hours)} h`;
+}
+
 export function buildTime(value: string): string {
   const date = new Date(value);
   return Number.isNaN(date.getTime())

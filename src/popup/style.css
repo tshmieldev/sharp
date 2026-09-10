@@ -599,6 +599,13 @@ input[type='range']:focus-visible::-webkit-slider-thumb {
   font-size: 11.5px;
 }
 
+/* Two controls that read as one decision sit side by side. */
+.pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
 /* ---- Chips / tokens ------------------------------------------------------ */
 .tokens {
   display: flex;
@@ -793,7 +800,7 @@ input[type='range']:focus-visible::-webkit-slider-thumb {
 /* ---- Stats --------------------------------------------------------------- */
 .stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--surface);
@@ -802,8 +809,11 @@ input[type='range']:focus-visible::-webkit-slider-thumb {
 .stats > div {
   padding: 11px 12px;
 }
-.stats > div + div {
+.stats > div:nth-child(even) {
   border-left: 1px solid var(--line);
+}
+.stats > div:nth-child(n + 3) {
+  border-top: 1px solid var(--line);
 }
 .stats b {
   display: block;

@@ -1,6 +1,14 @@
 import { Effect, Schema } from 'effect';
 import { attempt, OperationError } from '../common/errors';
-import { defaults, Settings, type SettingsPatch, type ListKey } from '../common/settings';
+import {
+  defaults,
+  MAX_CORRECTIONS,
+  Settings,
+  type SettingsPatch,
+  type ListKey,
+} from '../common/settings';
+import type { Post } from '../common/post';
+import type { CorrectionVerdict } from '../common/messages';
 import { Stats } from '../common/messages';
 import { withAuthorRule, type AuthorRule } from '../common/author-rules';
 
@@ -82,6 +90,27 @@ export function setThreadBypass(threadId: string, bypassed: boolean) {
       const others = settings.bypassedThreads.filter((id) => id !== threadId);
       const bypassedThreads = bypassed ? [...others, threadId].slice(-200) : others;
       yield* writeLocal({ settings: { ...settings, bypassedThreads } });
+    }),
+  );
+}
+
+/** Remember how the reader judged a post, or withdraw that lesson. The newest
+ *  correction of the same text wins, and the list is bounded so the prompt
+ *  cannot grow without limit. */
+export function setCorrection(post: Post, verdict: CorrectionVerdict) {
+  return storageLock.withPermits(1)(
+    Effect.gen(function* () {
+      const settings = yield* getSettings;
+      const text = post.text.trim().slice(0, 280);
+      if (!text) return yield* new OperationError({ message: 'This post has no text to learn.' });
+      const others = settings.corrections.filter((entry) => entry.text !== text);
+      const corrections =
+        verdict === 'forget'
+          ? others
+          : [...others, { handle: post.handle, text, hide: verdict === 'hide', at: Date.now() }];
+      yield* writeLocal({
+        settings: { ...settings, corrections: corrections.slice(-MAX_CORRECTIONS) },
+      });
     }),
   );
 }

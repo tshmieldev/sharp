@@ -109,12 +109,36 @@ export function App() {
   }
 
   if (!form) {
+    // A failed load must say so; a silent spinner is indistinguishable from a hang.
     return (
       <div class="shell">
         <Rail section={section} onSite={onSite} onSelect={setSection} />
         <div class="main">
           <div class="body">
-            <p class="note">Loading settings…</p>
+            {message?.tone === 'bad' ? (
+              <div class="alerts">
+                <Notice tone="bad">{message.text}</Notice>
+                <div class="actions">
+                  <button
+                    type="button"
+                    class="btn small"
+                    onClick={() => {
+                      setMessage(undefined);
+                      void refresh().catch((error: unknown) =>
+                        setMessage({
+                          text: error instanceof Error ? error.message : 'Could not load settings.',
+                          tone: 'bad',
+                        }),
+                      );
+                    }}
+                  >
+                    Try again
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p class="note">Loading settings…</p>
+            )}
           </div>
         </div>
       </div>

@@ -19,6 +19,15 @@ const Favorite = Schema.Struct({
   providerName: Schema.optional(Schema.String),
 });
 const Preset = Schema.Struct({ name: Schema.String, criteria: Schema.String });
+/** A post the reader overruled. Sent with every batch as an example of their judgement. */
+export const Correction = Schema.Struct({
+  handle: Schema.String.pipe(Schema.maxLength(30)),
+  text: Schema.String.pipe(Schema.maxLength(280)),
+  hide: Schema.Boolean,
+  at: Schema.Number,
+});
+export type Correction = typeof Correction.Type;
+export const MAX_CORRECTIONS = 12;
 
 export const Settings = Schema.Struct({
   enabled: Schema.Boolean,
@@ -30,9 +39,13 @@ export const Settings = Schema.Struct({
   routingProvider: Schema.String,
   criteria: Schema.String.pipe(Schema.maxLength(6000)),
   presets: Schema.Array(Preset),
+  corrections: Schema.Array(Correction).pipe(Schema.maxItems(MAX_CORRECTIONS)),
+  notInterested: Schema.Boolean,
   analyzeImages: Schema.Boolean,
   maxImagesPerPost: boundedInt(1, 4),
   hideStyle: Schema.Literal('collapse', 'blur'),
+  showAuthor: Schema.Boolean,
+  hideFully: Schema.Boolean,
   motion: Schema.Literal('auto', 'full', 'reduced'),
   lookahead: Schema.Number.pipe(Schema.int(), Schema.clamp(0, 500)),
   allowedAuthors: list,
@@ -41,7 +54,7 @@ export const Settings = Schema.Struct({
   bypassedThreads: list.pipe(Schema.maxItems(200)),
   favorites: Schema.Array(Favorite),
   batchSize: boundedInt(1, 30),
-  imageBatchSize: boundedInt(1, 10),
+  concurrency: boundedInt(1, 6),
 });
 export type Settings = typeof Settings.Type;
 export const SettingsPatch = Schema.partial(Settings);
@@ -58,9 +71,13 @@ export const defaults: Settings = {
   routingProvider: '',
   criteria: 'Hide engagement bait, rage bait and low-effort AI-generated slop.',
   presets: [],
+  corrections: [],
+  notInterested: false,
   analyzeImages: false,
   maxImagesPerPost: 2,
   hideStyle: 'collapse',
+  showAuthor: true,
+  hideFully: false,
   motion: 'auto',
   lookahead: 200,
   allowedAuthors: [],
@@ -69,8 +86,25 @@ export const defaults: Settings = {
   bypassedThreads: [],
   favorites: [],
   batchSize: 12,
-  imageBatchSize: 5,
+  concurrency: 3,
 };
+
+/** How much to spend on speed. Bigger batches mean fewer requests, and each
+ *  request carries the same instruction overhead, so fewer is cheaper; more
+ *  requests in flight settle the timeline sooner. */
+export const spendPresets = {
+  low: { label: 'Low', cost: '$', batchSize: 20, concurrency: 1 },
+  medium: { label: 'Medium', cost: '$$', batchSize: 12, concurrency: 3 },
+  high: { label: 'High', cost: '$$$', batchSize: 6, concurrency: 5 },
+} as const;
+export type SpendPreset = keyof typeof spendPresets | 'custom';
+export function spendPreset(settings: Pick<Settings, 'batchSize' | 'concurrency'>): SpendPreset {
+  for (const [key, preset] of Object.entries(spendPresets)) {
+    if (preset.batchSize === settings.batchSize && preset.concurrency === settings.concurrency)
+      return key as SpendPreset;
+  }
+  return 'custom';
+}
 
 export const providers = {
   openrouter: { label: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1' },
@@ -87,9 +121,18 @@ export function publicSettings(settings: Settings): PublicSettings {
   };
 }
 
-/** Only inputs that change an AI decision invalidate paid verdicts. */
+/** Only inputs that change an AI decision invalidate paid verdicts. Corrections
+ *  are deliberately left out: they steer future batches, and the corrected post
+ *  itself is written straight into the cache, so nothing already paid for is
+ *  thrown away each time the reader overrules one verdict. */
+/** Bump when the system prompt changes in a way that should re-judge cached
+ *  posts. Cached verdicts are keyed on this, so a bump re-buys the visible
+ *  timeline once; leave it alone for wording that cannot change a verdict. */
+export const PROMPT_VERSION = 2;
+
 export function decisionScope(settings: PublicSettings | Settings): string {
   return JSON.stringify([
+    PROMPT_VERSION,
     settings.provider,
     settings.provider === 'custom' ? settings.customBaseUrl : '',
     settings.model,

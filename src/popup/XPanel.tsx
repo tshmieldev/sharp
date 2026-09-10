@@ -1,10 +1,17 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { Stats } from '../common/messages';
+import { MAX_CORRECTIONS } from '../common/settings';
 import { Alert, ChevronRight, Close } from './icons';
+import * as fmt from './format';
 import { lists, type ListKey } from './ListSheet';
 import { RangeField, ToggleRow, type SettingsEditor } from './ui';
 
 export type XTab = 'filtering' | 'rules' | 'activity';
+
+// A hidden post is one the reader did not have to read past. This is roughly
+// the time a post holds the eye on the way by, and the number is labelled as
+// the estimate it is.
+export const SECONDS_PER_POST = 6;
 
 type Props = SettingsEditor & {
   tab: XTab;
@@ -106,6 +113,16 @@ export function XPanel({
           })}
         </section>
 
+        <section class="group">
+          <h2>Teach X too</h2>
+          <ToggleRow
+            label="Mark hidden posts “Not interested”"
+            hint="On the Home timeline, Sharp sends X's own “Not interested in this post” for each hidden post, so X's ranking learns as well. Close calls are never reported."
+            checked={settings.notInterested}
+            onChange={(value) => update('notInterested', value)}
+          />
+        </section>
+
         {thread && (
           <section class="group">
             <h2>Open thread</h2>
@@ -170,7 +187,14 @@ export function XPanel({
               <b>{(stats?.tokens ?? 0).toLocaleString()}</b>
               <span>Tokens</span>
             </div>
+            <div>
+              <b>≈{fmt.duration((stats?.hidden ?? 0) * SECONDS_PER_POST)}</b>
+              <span>Time saved</span>
+            </div>
           </div>
+          <p class="note tight">
+            Time saved assumes about {SECONDS_PER_POST} seconds of attention per hidden post.
+          </p>
           <div class="actions">
             <button type="button" class="btn small" disabled={busy} onClick={onResetStats}>
               Reset counters
@@ -306,6 +330,42 @@ export function XPanel({
         )}
       </section>
 
+      {settings.corrections.length > 0 && (
+        <section class="group">
+          <h2>Corrections</h2>
+          <p class="note tight">
+            Posts you overruled with “Keep posts like this” or “Hide posts like this”. Sent with
+            every batch as examples of your judgement; the newest {MAX_CORRECTIONS} are kept.
+          </p>
+          <div class="tokens">
+            {settings.corrections.map((entry) => (
+              <span key={`${entry.at}:${entry.text}`} class={`token ${entry.hide ? '' : 'accent'}`}>
+                <span title={entry.text}>
+                  {entry.hide ? 'Hide' : 'Keep'} · @{entry.handle}: {entry.text}
+                </span>
+                <button
+                  type="button"
+                  aria-label={`Forget this correction`}
+                  onClick={() =>
+                    update(
+                      'corrections',
+                      settings.corrections.filter((other) => other !== entry),
+                    )
+                  }
+                >
+                  <Close />
+                </button>
+              </span>
+            ))}
+          </div>
+          <div class="actions">
+            <button type="button" class="btn small" onClick={() => update('corrections', [])}>
+              Forget all corrections
+            </button>
+          </div>
+        </section>
+      )}
+
       <section class="group">
         <h2>Lookahead</h2>
         <RangeField
@@ -322,6 +382,22 @@ export function XPanel({
             ? 'Only posts on screen are judged, so you will watch them resolve.'
             : `Posts within ${settings.lookahead / 100} screens of the viewport are judged early, so most have settled before you reach them. Higher costs more requests.`}
         </p>
+      </section>
+
+      <section class="group">
+        <h2>Hidden posts</h2>
+        <ToggleRow
+          label="Show who wrote it"
+          hint="The author's name on the banner, next to the reason."
+          checked={settings.showAuthor}
+          onChange={(value) => update('showAuthor', value)}
+        />
+        <ToggleRow
+          label="Hide completely when the model is sure"
+          hint="No banner and no Show button. A post the model calls a close one keeps its banner, marked with a question instead of the gavel."
+          checked={settings.hideFully}
+          onChange={(value) => update('hideFully', value)}
+        />
       </section>
 
       <section class="group">

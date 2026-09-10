@@ -13,7 +13,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 it('accepts fences, wrappers and string booleans without inventing verdicts', () => {
   expect(parseVerdicts('```json\n[{"id":1,"hide":"true","reason":"bait"}]\n```')).toEqual([
-    { id: '1', hide: true, reason: 'bait' },
+    { id: '1', hide: true, reason: 'bait', unsure: false },
   ]);
   expect(parseVerdicts('{"results":[{"id":"2","hide":false}]}')[0]?.hide).toBe(false);
   expect(parseVerdicts('[{"id":"1"},{"id":"2","hide":"maybe"}]')).toEqual([]);
@@ -120,4 +120,11 @@ it('aborts a stalled provider request at the deadline', async () => {
   } finally {
     vi.useRealTimers();
   }
+});
+
+it('shows the unsure flag in the example shape, so models actually emit it', () => {
+  const body = classificationBody(settings, posts) as { messages: { content: string }[] };
+  const system = body.messages[0]!.content;
+  expect(system).toMatch(/"hide":true,"reason":"[^"]*","unsure":false/);
+  expect(system).toContain('close one');
 });

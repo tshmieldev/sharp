@@ -125,3 +125,14 @@ it('denies privileged content-script requests but allows the popup', async () =>
     }),
   ).toMatchObject({ ok: true, result: { apiKeys: {} } });
 });
+
+it('fills settings from an older worker with defaults instead of failing', async () => {
+  const { chrome } = mockChrome();
+  const { concurrency: _dropped, ...stale } = defaults;
+  chrome.runtime.sendMessage.mockResolvedValue({ ok: true, result: stale });
+  await expect(request({ type: 'GET_SETTINGS' })).resolves.toMatchObject({
+    concurrency: defaults.concurrency,
+  });
+  chrome.runtime.sendMessage.mockResolvedValue({ ok: true, result: { ...stale, enabled: 'yes' } });
+  await expect(request({ type: 'GET_SETTINGS' })).rejects.toThrow();
+});

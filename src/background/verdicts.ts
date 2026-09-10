@@ -4,6 +4,9 @@ const Row = Schema.Struct({
   id: Schema.Union(Schema.String, Schema.Number),
   hide: Schema.Union(Schema.Boolean, Schema.Literal('true', 'false')),
   reason: Schema.optional(Schema.String),
+  unsure: Schema.optional(
+    Schema.Union(Schema.Boolean, Schema.Number, Schema.Literal('true', 'false', 'yes', 'no')),
+  ),
 });
 const decodeRow = Schema.decodeUnknownOption(Row);
 
@@ -38,6 +41,11 @@ export function parseVerdicts(text: string) {
           id: String(value.id),
           hide: value.hide === true || value.hide === 'true',
           reason: value.reason?.slice(0, 200) ?? '',
+          unsure:
+            value.unsure === true ||
+            value.unsure === 1 ||
+            value.unsure === 'true' ||
+            value.unsure === 'yes',
         },
       ];
     });

@@ -4,6 +4,7 @@ coverage/
 /background.js
 /content.js
 /content.css
+/wire.js
 /popup.js
 /popup.css
 /popup.html

@@ -24,6 +24,10 @@ Describe what you want to see — or never see again — in plain language.
 - **Per-author rules.** Never filter someone, or always hide them, straight from
   a post's ⋯ menu.
 - **Blocked words**, matched before the model is asked.
+- **Teach it.** Mark a hidden post as a wrong call, or pick "Hide posts like
+  this" from the ⋯ menu; your recent corrections go to the model as examples.
+- **Teach X too.** Optionally, Sharp tells X you're not interested in what it
+  hides, so the algorithm learns alongside the model.
 - **Thread escape hatch.** One click above the reply box shows every comment in
   a thread, filters off.
 - **Nothing shown before it's judged.** Undecided posts wait behind a

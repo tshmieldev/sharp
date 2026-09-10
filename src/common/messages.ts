@@ -1,7 +1,11 @@
 import { Effect, Schema } from 'effect';
 import { attempt, OperationError } from './errors';
 import { Post, Verdict } from './post';
-import { ListKey, Settings, SettingsPatch } from './settings';
+
+/** keep/hide teach the model; forget withdraws the lesson. */
+export const CorrectionVerdict = Schema.Literal('keep', 'hide', 'forget');
+export type CorrectionVerdict = typeof CorrectionVerdict.Type;
+import { defaults, ListKey, Settings, SettingsPatch } from './settings';
 import { AuthorHandle, AuthorRule } from './author-rules';
 
 export const Stats = Schema.Struct({
@@ -63,6 +67,11 @@ export const Request = Schema.Union(
     items: Schema.Array(Post).pipe(Schema.maxItems(30)),
   }),
   Schema.Struct({
+    type: Schema.Literal('CORRECT_VERDICT'),
+    post: Post,
+    verdict: CorrectionVerdict,
+  }),
+  Schema.Struct({
     type: Schema.Literal('STAT_HIDDEN'),
     count: Schema.Number.pipe(Schema.int(), Schema.between(1, 1000)),
   }),
@@ -88,6 +97,7 @@ export const responses = {
   SET_THREAD_BYPASS: Schema.Void,
   TOGGLE_LIST: Schema.Boolean,
   EVALUATE: Schema.Array(Verdict),
+  CORRECT_VERDICT: Schema.Void,
   STAT_HIDDEN: Schema.Void,
   LIST_MODELS: Schema.Array(Model),
   LIST_ENDPOINTS: Schema.Array(ModelEndpoint),
@@ -99,6 +109,11 @@ export const responses = {
   CACHE_SIZE: Schema.Number,
 };
 type Response<T extends Request['type']> = (typeof responses)[T]['Type'];
+const settingsResponses = new Set<Request['type']>([
+  'GET_SETTINGS',
+  'GET_PUBLIC_SETTINGS',
+  'PATCH_SETTINGS',
+]);
 const Envelope = Schema.Union(
   Schema.Struct({ ok: Schema.Literal(true), result: Schema.optional(Schema.Unknown) }),
   Schema.Struct({ ok: Schema.Literal(false), error: Schema.String }),
@@ -113,7 +128,14 @@ export function request<T extends Request>(message: T): Promise<Response<T['type
       if (!envelope.ok) return yield* new OperationError({ message: envelope.error });
       // Indexing a heterogeneous schema map loses the key/result relationship in TS.
       const schema = responses[message.type] as Schema.Schema<Response<T['type']>>;
-      return yield* Schema.decodeUnknown(schema)(envelope.result);
+      // An unpacked rebuild swaps this script at once but leaves the old worker
+      // running until the extension is reloaded. Its settings lack fields added
+      // since; defaults fill them in rather than failing the whole popup or tab.
+      const result =
+        settingsResponses.has(message.type) && typeof envelope.result === 'object'
+          ? { ...defaults, ...envelope.result }
+          : envelope.result;
+      return yield* Schema.decodeUnknown(schema)(result);
     }).pipe(Effect.timeout('40 seconds')),
   );
 }

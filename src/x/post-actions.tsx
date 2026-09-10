@@ -1,23 +1,25 @@
 import { render, type JSX } from 'preact';
 import { useRef, useState } from 'preact/hooks';
-import { request, type Request } from '../common/messages';
+import { request } from '../common/messages';
 import { authorRule } from '../common/author-rules';
 import type { PublicSettings } from '../common/settings';
-import { Eye, EyeOff, ShieldCheck, ShieldOff } from './icons';
+import { Eye, EyeOff, ShieldCheck, ShieldOff, Teach } from './icons';
 
 type Props = {
   handle: string;
   settings: PublicSettings;
   isCurrent: () => boolean;
   dismiss: () => void;
+  /** Teach the model from this post; absent when no model is configured. */
+  onCorrect?: () => void;
 };
 type MenuAction = {
   label: string;
   icon: JSX.Element;
-  message: Extract<Request, { type: 'SET_AUTHOR_RULE' }>;
+  run: () => Promise<unknown>;
 };
 
-function PostActions({ handle, settings, isCurrent, dismiss }: Props) {
+function PostActions({ handle, settings, isCurrent, dismiss, onCorrect }: Props) {
   const rule = authorRule(settings, handle);
   const saving = useRef(false);
   const [busy, setBusy] = useState(false);
@@ -27,23 +29,32 @@ function PostActions({ handle, settings, isCurrent, dismiss }: Props) {
       label:
         rule === 'allow' ? `Remove filter exemption for @${handle}` : `Never filter @${handle}`,
       icon: rule === 'allow' ? <ShieldOff /> : <ShieldCheck />,
-      message: { type: 'SET_AUTHOR_RULE', handle, rule: rule === 'allow' ? 'default' : 'allow' },
+      run: () =>
+        request({ type: 'SET_AUTHOR_RULE', handle, rule: rule === 'allow' ? 'default' : 'allow' }),
     },
     {
       label: rule === 'block' ? `Stop always hiding @${handle}` : `Always hide @${handle}`,
       icon: rule === 'block' ? <Eye /> : <EyeOff />,
-      message: { type: 'SET_AUTHOR_RULE', handle, rule: rule === 'block' ? 'default' : 'block' },
+      run: () =>
+        request({ type: 'SET_AUTHOR_RULE', handle, rule: rule === 'block' ? 'default' : 'block' }),
     },
   ];
+  if (onCorrect) {
+    actions.push({
+      label: 'Hide posts like this',
+      icon: <Teach />,
+      run: async () => onCorrect(),
+    });
+  }
 
-  async function save(message: MenuAction['message']) {
+  async function save(run: MenuAction['run']) {
     // Guard synchronous repeat activation before Preact has rendered the busy state.
     if (saving.current || !isCurrent()) return;
     saving.current = true;
     setBusy(true);
     setError('');
     try {
-      await request(message);
+      await run();
       if (!isCurrent()) return; // A save may outlive the menu that initiated it.
       dismiss();
     } catch {
@@ -67,7 +78,7 @@ function PostActions({ handle, settings, isCurrent, dismiss }: Props) {
           onClick={(event) => {
             event.stopPropagation();
             event.preventDefault();
-            void save(action.message);
+            void save(action.run);
           }}
         >
           {action.icon}

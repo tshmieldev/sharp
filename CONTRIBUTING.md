@@ -12,6 +12,7 @@ Use [Bun](https://bun.sh/) 1.3.10 or newer (CI uses 1.3.10).
 ```sh
 bun install --frozen-lockfile
 bun run dev          # rebuild scripts and styles as you edit
+bun run build:debug  # one unminified build with inline source maps
 bun run typecheck    # strict TypeScript, without emitting
 bun run test         # focused provider, storage, cache, RPC and menu checks
 bun run format       # format source and docs
@@ -37,7 +38,16 @@ The build writes the bundled scripts, styles, and popup HTML **beside
 the original unpacked-extension path and ID. No runtime code is loaded from a
 CDN.
 
-Reload the extension and X tabs to use rebuilt code. Restart `bun run dev` after
+`bun run build` minifies. When a stack trace points at `content.js:45`, use
+`bun run build:debug` (or `bun run dev`): readable names, inline source maps, so
+Chrome shows the TypeScript line. Do not ship a debug build; `release` rebuilds.
+
+Reload the extension and X tabs to use rebuilt code. **The popup and content
+script load from disk on every open, but the service worker keeps running until
+the extension is reloaded.** After a rebuild that adds a settings field, a fresh
+popup would otherwise be talking to a worker that has never heard of it; the
+RPC layer fills missing settings fields with defaults so that window is
+survivable, but it is still a mismatch. Reload. Restart `bun run dev` after
 changing the manifest, popup HTML, or icons; those static assets are copied at
 startup.
 
@@ -122,17 +132,102 @@ covers SPA navigation, delayed focal posts, and expired retry deadlines.
 
 **Selection.** `nearViewport` limits work to the reader's `lookahead` setting, a
 percentage of a viewport either side, so posts far from the fold are neither
-judged nor paid for. Batches fill to `batchSize` (or `imageBatchSize` when images
-are on) in DOM order.
+judged nor paid for. Batches fill to `batchSize` in DOM order, images or not.
 
 **Concurrency.** A full batch is dispatched immediately and the next starts at
-once, up to `MAX_IN_FLIGHT` (3). `BATCH_WINDOW` (200ms) only bounds how long a
+once, up to the reader's `concurrency` setting (default 3). Together with
+`batchSize` this is the popup's **Spending** control: presets are named pairs
+in `spendPresets`, and any other pair reads as Custom. `BATCH_WINDOW` (200ms) only bounds how long a
 partial batch waits for stragglers. In the worker, the cache lock covers the
 read and the merge but never the provider call, so requests overlap; the merge
 re-reads under the lock rather than writing back its original snapshot, so
 overlapping batches cannot drop each other's verdicts.
 
 **Deadlines** nest: provider fetch 25s < evaluate 32s < content request 40s.
+
+## Corrections and "Not interested"
+
+**A correction is a verdict the reader made.** Once a hidden post is revealed
+with **Show**, a "Wrong call?" strip takes the banner's place and discloses two
+checks in flow: _Never filter @author_ (an author rule) and _Keep posts like
+this_ (`CORRECT_VERDICT` with `keep`; unchecking sends `forget`). "Hide posts
+like this" in the ⋯ menu sends `hide`. The worker replaces any correction with
+the same text in `settings.corrections` (bounded to `MAX_CORRECTIONS`) and, for
+`keep`/`hide`, writes the corrected verdict straight into the cache under the
+current decision scope. A `hide` from the menu settles the post locally first;
+a `keep` from a revealed post changes nothing on screen, it is already showing.
+
+**Unsure is a flag, not a score.** The prompt's example row carries
+`"unsure":false` so models reproduce the key; it is true only for a hide that
+is a close call. It is carried through `parseVerdicts`,
+the verdict, and the cache entry. The banner swaps the gavel for an accent
+question mark, and
+`hideFully` (no banner, article `display: none`) is skipped for unsure posts so
+a close call always keeps its banner and its Show button. `showAuthor` only
+drops the name from the banner.
+
+Corrections are sent with every batch as JSON examples marked as data, and are
+deliberately **not** part of `decisionScope`: they steer future decisions, and
+throwing away every cached verdict on each correction would re-buy the visible
+timeline for a one-post change. Verdicts cached before a correction stand until
+they expire or **Clear cache** is used.
+
+**"Not interested" is opt-in, only on `/home`, and never for an unsure verdict.**
+It is sent over the wire first. `wire.js` runs in the page's world
+(manifest `world: MAIN`) and decorates `window.fetch`: the original is called
+with the original arguments and its promise returned untouched; for `/i/api/`
+requests it also reads the signing headers X sent (`authorization`,
+`x-csrf-token`, `x-client-transaction-id`, `x-twitter-*`) and, for GraphQL
+JSON responses, clones the response and lifts each entry's
+`feedbackInfo.feedbackMetadata` keyed by post id. Both cross to the content
+script by `window.postMessage`, same-window and same-origin only. `Feedback`
+then POSTs `/i/api/2/timeline/feedback.json?feedback_type=DontLike&action_metadata=…`
+with body `feedback_type=DontLike&undo=false`, exactly what X's menu sends.
+The banner shows "Telling X" then "Told X"; no menu opens and X draws no card,
+so nothing in the timeline changes hands. The metadata is Thrift compact:
+`{4: [{1: postId}, {2: authorId}], 5: 30 days}`; Sharp echoes X's blob rather
+than encoding it. The `x-client-transaction-id` is reused from X's latest call;
+if X ever rejects that, the request fails soft and the menu path below runs.
+
+The menu path is the fallback, used when the wire has not yet supplied
+metadata and headers for a post, or X refused the request. With `notInterested` on, a
+hidden post's ⋯ caret is clicked, the dropdown that names the same post via its
+`tweetEngagements` link is found, and the menu item whose text matches
+_Not interested in this post_ is activated. While this runs the document carries
+`data-aitf-auto`, which hides the dropdown; the menu adapter reads an invisible
+dropdown as absent, so it never injects rows into a menu the extension opened.
+Reports are serial because X shows one menu at a time; each takes as long as
+the menu takes to open and close plus a 200ms gap. Each one makes X mount and
+unmount a portal, and opening one closes any menu the reader has open, so the
+runner waits for `requestIdleCallback`, never starts one within 250ms of a
+scroll event, and holds while any dropdown, menu or dialog is visible in
+`#layers`. The mutation observer re-claims a
+swapped cell with O(1) work only; the page-wide lookup by handle runs from the
+throttled scan. At most once per post
+identity per tab, capped per tab, and abandoned after three menus without a
+matching item (a non-English
+interface). Nothing else in a native menu is ever activated.
+
+The sequence is: verdict → hidden → "Not interested" clicked → the spot stays
+hidden while X's "Thanks, X will use this" card materialises → nothing (hide
+completely) or a "hidden, X told" banner with Undo. The card names the author
+and must never be painted, so the controller claims the post's `cellInnerDiv`
+**immediately before the menu item is clicked** (`NotInterested`'s `before`
+hook; X can swap the post synchronously inside that click) and dresses it via
+`view.applyFeedback` with a "Telling X…" tag (`told`, keyed by post id). X swaps the
+cell's contents or the cell itself on its own schedule; the spot is remembered
+by parent, index and previous sibling, and the mutation observer re-claims a
+swapped cell synchronously, before the frame paints. As a last resort the card
+is found by the author's handle, which X prints in "Show fewer posts from …". A cell with no post and a
+button is the acknowledged card ("Told X", Undo enabled; Undo activates X's
+own). The cell is handed back when X puts a post in it, but only Undo (the same
+post, back in its cell) ends the claim; a recycled cell just drops the node,
+and the claim waits to find its card again. Unanswered clicks expire after
+`FEEDBACK_WAIT`. An acknowledged claim
+is kept for the tab (bounded by `MAX_TOLD`): X redraws its card from memory
+whenever it rebuilds the timeline, such as after opening a post and going
+back, and the handle lookup claims it again each time. Hidden-state CSS is
+therefore keyed on `[data-aitf-hidden]` rather than on `article`.
 
 ## Rule precedence
 
@@ -157,8 +252,10 @@ AI classification, not local rules.
 - Stored settings are merged over defaults before decoding, so a build that adds
   a field cannot fail on older data.
 - Successful verdicts are cached locally for seven days, up to 4,000 entries.
-  Cache identities include provider, custom endpoint, model, routing pin,
-  criteria, image configuration, post ID, author, and text. Mounted reply context
+  Cache identities include `PROMPT_VERSION`, provider, custom endpoint, model,
+  routing pin, criteria, image configuration, post ID, author, and text. Bump
+  `PROMPT_VERSION` when the system prompt changes in a way that can change a
+  verdict; that re-judges the visible timeline once. Mounted reply context
   and thumbnail variants are intentionally excluded to avoid charging again
   whenever X remounts a neighboring post.
 - Failed or missing verdicts are not cached. Posts stay visible, with at most
@@ -204,7 +301,11 @@ Before shipping, manually check with your own browser and provider:
 
 1. Build and load the repository root; check for manifest and service-worker errors.
 2. Save a connection and test it, then open an X timeline.
-3. Confirm collapse, blur, **Show**, allowed authors, and blocked words.
+3. Confirm collapse, blur, **Show**, allowed authors, and blocked words. After
+   **Show**, open **Wrong call?** and check both rows; the author rule and the
+   correction must appear in the popup, and a corrected post must stay decided
+   after a reload without a new request. With **Hide completely** on, only
+   close calls keep a banner with the question mark.
 4. Open a thread: its ancestors/root stay visible; replies may be filtered.
 5. Toggle filtering and navigate without reloading; old decisions must not leak
    onto recycled posts.
@@ -215,6 +316,9 @@ Before shipping, manually check with your own browser and provider:
    check that author rules target the displayed original author. Check native
    actions, keyboard activation/dismissal, and light/dim/dark themes.
 9. Scroll fast in both directions and confirm the scroll position never jumps.
+10. Turn on **Mark hidden posts "Not interested"** on Home: hidden posts turn
+    into X's "Thanks for your feedback" card one at a time, no menu is visible,
+    and the ⋯ menu still works by hand while it runs.
 
 X's DOM is not a public API. Extraction and menu selectors are isolated in
 `src/x/extract.ts` and `src/x/post-menu-dom.ts`. The current menu adapter targets

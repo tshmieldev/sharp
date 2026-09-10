@@ -12,6 +12,8 @@ export const Verdict = Schema.Struct({
   key: Schema.String,
   hide: Schema.Boolean,
   reason: Schema.String,
+  /** The model hid it but called it a close one. */
+  unsure: Schema.optional(Schema.Boolean),
   failed: Schema.optional(Schema.Boolean),
 });
 export type Verdict = typeof Verdict.Type;

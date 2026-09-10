@@ -25,7 +25,7 @@ export function startX() {
     document.documentElement.dataset.aitfBuild = buildId;
     void controller.start().then(() => {
       if (!disposed && controller.getSettings())
-        removeMenu = installPostMenu(controller.getSettings);
+        removeMenu = installPostMenu(controller.getSettings, controller.correctPost);
     });
   }
   // The manifest runs at document_start, when body may not exist yet.

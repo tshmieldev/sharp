@@ -20,7 +20,10 @@ type Session = {
 
 /** Observe X's portal, not the timing of a click. Already-open and staged menus
  * follow the same rule: one visible dropdown with a native, exact post identity. */
-export function installPostMenu(getSettings: () => PublicSettings | null) {
+export function installPostMenu(
+  getSettings: () => PublicSettings | null,
+  correct?: (id: string, verdict: 'keep' | 'hide') => void,
+) {
   let current: Session | null = null;
   let dismissed: { dropdown: HTMLElement; key: string } | null = null;
   let observedPortal: HTMLElement | null | undefined;
@@ -106,6 +109,7 @@ export function installPostMenu(getSettings: () => PublicSettings | null) {
       handle: post.handle,
       settings,
       isCurrent,
+      onCorrect: correct && settings.configured ? () => correct(post.id, 'hide') : undefined,
       dismiss: () => {
         if (!isCurrent()) return;
         // Ask X to close its own portal; don't activate or remove native items.

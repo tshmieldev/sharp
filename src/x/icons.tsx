@@ -51,3 +51,28 @@ export const Eye = (props: JSX.SVGAttributes<SVGSVGElement>) =>
 
 export const Check = (props: JSX.SVGAttributes<SVGSVGElement>) =>
   svg(props, <path d="m5 12.5 4.5 4.5L19 7" />);
+
+/** A wand: the reader teaches the model by pointing at a post. */
+export const Teach = (props: JSX.SVGAttributes<SVGSVGElement>) =>
+  svg(
+    props,
+    <path d="m4 20 10.5-10.5M13 6l1-3 1 3 3 1-3 1-1 3-1-3-3-1ZM19 13l.6-1.6.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6Z" />,
+  );
+
+/** The verdict mark for a close call: same footprint as the gavel, a question
+ *  instead of a strike. */
+export const Query = (props: JSX.SVGAttributes<SVGSVGElement>) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2.2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+    class="aitf-mark aitf-mark-query"
+    {...props}
+  >
+    <path d="M8.6 9.2a3.5 3.5 0 1 1 5.3 3c-1.3.8-1.9 1.5-1.9 2.9M12 18.6h.01" />
+  </svg>
+);

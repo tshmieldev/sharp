@@ -17,7 +17,7 @@ const files = [
   manifest.background.service_worker,
   manifest.action.default_popup,
   ...new Set([...Object.values(manifest.icons), ...Object.values(manifest.action.default_icon)]),
-  ...manifest.content_scripts.flatMap((script) => [...script.js, ...script.css]),
+  ...manifest.content_scripts.flatMap((script) => [...script.js, ...(script.css ?? [])]),
   'popup.js',
   'popup.css',
 ];

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Sharp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Filter your timeline with your own AI provider, word rules and per-author rules.",
   "permissions": ["storage"],
   "host_permissions": [
@@ -17,6 +17,12 @@
     "type": "module"
   },
   "content_scripts": [
+    {
+      "matches": ["https://x.com/*", "https://twitter.com/*"],
+      "js": ["wire.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
     {
       "matches": ["https://x.com/*", "https://twitter.com/*"],
       "js": ["content.js"],

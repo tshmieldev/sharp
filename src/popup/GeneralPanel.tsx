@@ -1,9 +1,15 @@
 import { useState } from 'preact/hooks';
-import { providers, type Provider } from '../common/settings';
+import {
+  providers,
+  spendPreset,
+  spendPresets,
+  type Provider,
+  type SpendPreset,
+} from '../common/settings';
 import { buildId } from '../common/build';
 import * as fmt from './format';
 import { Check, ChevronRight, Close, Coffee, External, Eye, EyeOff, GitHub, Star } from './icons';
-import { Field, NumberField, Segmented, type SettingsEditor } from './ui';
+import { Field, NumberField, RangeField, Segmented, type SettingsEditor } from './ui';
 
 export type GeneralTab = 'connection' | 'appearance' | 'about';
 
@@ -270,25 +276,67 @@ export function GeneralPanel({
         </p>
       </section>
 
-      <details class="group">
-        <summary class="note">Batch limits</summary>
-        {(
-          [
-            ['batchSize', 'Posts per request', 30],
-            ['imageBatchSize', 'Posts per request with images', 10],
-            ['maxImagesPerPost', 'Images per post', 4],
-          ] as const
-        ).map(([field, label, max]) => (
-          <NumberField
-            key={field}
-            label={label}
+      <section class="group">
+        <h2>Spending</h2>
+        <Segmented
+          label="Spending preset"
+          value={spendPreset(settings)}
+          onChange={(value) => {
+            if (value === 'custom') return;
+            const preset = spendPresets[value];
+            update('batchSize', preset.batchSize);
+            update('concurrency', preset.concurrency);
+          }}
+          options={[
+            ...(
+              Object.entries(spendPresets) as [
+                SpendPreset,
+                (typeof spendPresets)[keyof typeof spendPresets],
+              ][]
+            ).map(([value, preset]) => ({ value, label: `${preset.cost} ${preset.label}` })),
+            { value: 'custom' as SpendPreset, label: 'Custom' },
+          ]}
+        />
+        <div class="pair">
+          <RangeField
+            label="Posts per request"
             min={1}
-            max={max}
-            value={settings[field]}
-            onChange={(next) => update(field, next)}
+            max={30}
+            step={1}
+            value={settings.batchSize}
+            display={String(settings.batchSize)}
+            onChange={(next) => update('batchSize', next)}
           />
-        ))}
-      </details>
+          <RangeField
+            label="Requests at once"
+            min={1}
+            max={6}
+            step={1}
+            value={settings.concurrency}
+            display={String(settings.concurrency)}
+            onChange={(next) => update('concurrency', next)}
+          />
+        </div>
+        <p class="note tight">
+          {spendPreset(settings) === 'low'
+            ? 'Fewest requests, so the least paid for instructions. Posts settle a little later.'
+            : spendPreset(settings) === 'high'
+              ? 'Small batches in parallel settle the timeline fastest. Every request repeats the instructions, so this costs the most.'
+              : spendPreset(settings) === 'medium'
+                ? 'Batches of a dozen, three in flight. A sensible middle.'
+                : 'Each request repeats the instructions, so bigger batches cost less per post. More requests at once settle the timeline sooner.'}
+        </p>
+        <details>
+          <summary class="note">Image limits</summary>
+          <NumberField
+            label="Images per post"
+            min={1}
+            max={4}
+            value={settings.maxImagesPerPost}
+            onChange={(value) => update('maxImagesPerPost', value)}
+          />
+        </details>
+      </section>
     </div>
   );
 }

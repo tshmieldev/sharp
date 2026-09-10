@@ -13,6 +13,7 @@ import {
   readLocal,
   resetStats,
   setAuthorRule,
+  setCorrection,
   setStatus,
   setThreadBypass,
   toggleList,
@@ -22,6 +23,7 @@ const evaluator = createEvaluator();
 const contentRequests = new Set<Request['type']>([
   'GET_PUBLIC_SETTINGS',
   'EVALUATE',
+  'CORRECT_VERDICT',
   'STAT_HIDDEN',
   'TOGGLE_LIST',
   'SET_AUTHOR_RULE',
@@ -56,6 +58,14 @@ function handle(message: Request) {
         return yield* evaluator
           .evaluate(settings, message.items)
           .pipe(Effect.tapError((error) => setStatus(errorMessage(error))));
+      }
+      case 'CORRECT_VERDICT': {
+        yield* setCorrection(message.post, message.verdict);
+        // Forgetting withdraws the example only; what the reader sees stays decided.
+        if (message.verdict === 'forget') return;
+        // Read back after the write, so the override is keyed on saved settings.
+        yield* evaluator.override(yield* getSettings, message.post, message.verdict === 'hide');
+        return;
       }
       case 'STAT_HIDDEN':
         return yield* bumpStats({ hidden: message.count });

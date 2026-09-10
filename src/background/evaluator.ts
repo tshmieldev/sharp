@@ -8,6 +8,7 @@ import { bumpStats, readLocal, setStatus, writeLocal } from './storage';
 const CacheEntry = Schema.Struct({
   hide: Schema.Boolean,
   reason: Schema.String,
+  unsure: Schema.optional(Schema.Boolean),
   at: Schema.Number,
 });
 const Cache = Schema.Record({ key: Schema.String, value: CacheEntry });
@@ -67,7 +68,12 @@ export function createEvaluator(runClassification = classify) {
         for (const [key, post] of unique) {
           const verdict = byId.get(post.key);
           if (verdict && !verdict.failed)
-            updates[key] = { hide: verdict.hide, reason: verdict.reason, at: now };
+            updates[key] = {
+              hide: verdict.hide,
+              reason: verdict.reason,
+              ...(verdict.unsure ? { unsure: true } : {}),
+              at: now,
+            };
         }
         yield* lock.withPermits(1)(
           Effect.gen(function* () {
@@ -91,14 +97,42 @@ export function createEvaluator(runClassification = classify) {
         const key = keys[index]!;
         const entry = updates[key] ?? cache[key];
         return entry && now - entry.at <= TTL
-          ? { key: post.key, hide: entry.hide, reason: entry.reason }
+          ? {
+              key: post.key,
+              hide: entry.hide,
+              reason: entry.reason,
+              ...(entry.unsure ? { unsure: true } : {}),
+            }
           : { key: post.key, hide: false, reason: '', failed: true };
       });
     }).pipe(Effect.timeout('32 seconds'));
   }
 
+  /** A correction is a verdict the reader already paid for with their attention:
+   *  store it like one, so the post stays decided across reloads and remounts. */
+  function override(settings: Settings, post: Post, hide: boolean) {
+    return Effect.gen(function* () {
+      const key = yield* cacheKey(settings, post);
+      yield* lock.withPermits(1)(
+        Effect.gen(function* () {
+          const current = yield* load;
+          const now = Date.now();
+          const entry = { hide, reason: hide ? 'Your correction' : '', at: now };
+          const next = Object.fromEntries(
+            Object.entries({ ...current, [key]: entry })
+              .filter(([, value]) => now - value.at <= TTL)
+              .sort((a, b) => b[1].at - a[1].at)
+              .slice(0, LIMIT),
+          );
+          yield* writeLocal({ [CACHE_KEY]: next });
+        }),
+      );
+    });
+  }
+
   return {
     evaluate,
+    override,
     clear,
     size: attempt(() => chrome.storage.local.getBytesInUse(CACHE_KEY)),
   };

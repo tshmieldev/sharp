@@ -9,17 +9,32 @@
   }
 }
 
+/* While the extension chooses "Not interested" on the reader's behalf, the menu
+   it opened is invisible, and the menu adapter reads invisible as absent. */
+html[data-aitf-auto] #layers [data-testid='Dropdown'],
+html[data-aitf-auto] #layers [data-testid='Dropdown'] * {
+  visibility: hidden !important;
+}
+
 /* Collapsing and blurring take the post out of flow, so the marker becomes the
-   article's only visible child and a full-width basis gives it its own line. */
-article[data-aitf-hidden='collapse'] > :not(.aitf-slot) {
+   article's only visible child and a full-width basis gives it its own line.
+   The same rules dress a timeline cell once X has swapped a hidden post for
+   its feedback card. */
+[data-aitf-hidden='collapse'] > :not(.aitf-slot) {
   display: none !important;
 }
-article[data-aitf-hidden='blur'] > :not(.aitf-slot) {
+[data-aitf-hidden='blur'] > :not(.aitf-slot) {
   filter: blur(16px) !important;
   pointer-events: none !important;
   user-select: none !important;
 }
-article[data-aitf-hidden] {
+/* Fully hidden: no banner, no button, no trace. Only a verdict the reader has
+   set to be sure of gets here; a close call keeps its banner. */
+[data-aitf-hidden='remove'] {
+  display: none !important;
+}
+[data-aitf-hidden],
+article[data-aitf-revealed] {
   flex-wrap: wrap !important;
 }
 .aitf-slot {
@@ -104,17 +119,6 @@ article[data-aitf-hidden='pending'] > .aitf-slot {
 .aitf-line.short {
   width: 62%;
 }
-.aitf-spinner {
-  position: absolute;
-  top: 13px;
-  right: 16px;
-  width: 14px;
-  height: 14px;
-  border: 2px solid color-mix(in srgb, currentColor 14%, transparent);
-  border-top-color: var(--aitf-accent);
-  border-radius: 99px;
-  animation: aitf-spin 720ms linear infinite;
-}
 .aitf-glow {
   position: absolute;
   inset-inline: 0;
@@ -143,11 +147,6 @@ article[data-aitf-hidden='pending'] > .aitf-slot {
     opacity: 0;
   }
 }
-@keyframes aitf-spin {
-  to {
-    transform: rotate(1turn);
-  }
-}
 @keyframes aitf-shimmer {
   from {
     background-position: 140% 0;
@@ -166,9 +165,6 @@ article[data-aitf-hidden='pending'] > .aitf-slot {
 }
 /* The page setting and the device setting reach the same rules; an explicit
    "No" opts out of the device one. */
-html[data-aitf-motion='reduced'] .aitf-spinner {
-  animation-duration: 3s;
-}
 html[data-aitf-motion='reduced'] .aitf-avatar,
 html[data-aitf-motion='reduced'] .aitf-headline,
 html[data-aitf-motion='reduced'] .aitf-line {
@@ -180,9 +176,6 @@ html[data-aitf-motion='reduced'] .aitf-glow i {
   animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
-  html:not([data-aitf-motion='full']) .aitf-spinner {
-    animation-duration: 3s;
-  }
   html:not([data-aitf-motion='full']) .aitf-avatar,
   html:not([data-aitf-motion='full']) .aitf-headline,
   html:not([data-aitf-motion='full']) .aitf-line {
@@ -218,8 +211,17 @@ html[data-aitf-motion='reduced'] .aitf-glow i {
   display: flex;
   flex: 1;
   min-width: 0;
-  align-items: baseline;
-  gap: 8px;
+  align-items: center;
+  gap: 7px;
+}
+/* A docket line: who, then why, one quiet point between. */
+.aitf-sep {
+  flex: none;
+  width: 3px;
+  height: 3px;
+  border-radius: 99px;
+  background: currentColor;
+  opacity: 0.35;
 }
 .aitf-name {
   flex: none;
@@ -258,6 +260,192 @@ html[data-aitf-motion='reduced'] .aitf-glow i {
 .aitf-show {
   padding: 5px 13px;
   font-size: 13px;
+}
+.aitf-show.quiet {
+  gap: 6px;
+  padding-inline: 10px 12px;
+  border-color: transparent;
+  font-weight: 500;
+  opacity: 0.7;
+  transition:
+    opacity 140ms ease-out,
+    background-color 140ms ease-out,
+    border-color 140ms ease-out;
+}
+.aitf-show.quiet .aitf-mark {
+  width: 16px;
+  height: 16px;
+  opacity: 0.8;
+}
+.aitf-show.quiet:hover,
+.aitf-show.quiet[aria-expanded='true'] {
+  opacity: 1;
+}
+.aitf-show.quiet[aria-expanded='true'] {
+  border-color: color-mix(in srgb, var(--aitf-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--aitf-accent) 13%, transparent);
+}
+.aitf-show.quiet[aria-expanded='true'] .aitf-mark {
+  color: var(--aitf-accent);
+  opacity: 1;
+}
+
+/* A close call is still hidden. The gavel stays as it is for a sure verdict;
+   a close call swaps it for a question in the accent, and the whole timeline
+   cell takes a tint, edge to edge, so the doubt reads from across the room. */
+.aitf-mark-query {
+  color: var(--aitf-accent);
+  opacity: 1;
+}
+[data-aitf-unsure] {
+  background: color-mix(in srgb, var(--aitf-accent) 7%, transparent) !important;
+}
+
+/* Filing the verdict. Before X answers: a breathing point, the words in
+   waiting. When it answers: a check. */
+.aitf-told {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  margin-inline-start: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  opacity: 0.55;
+}
+.aitf-told svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2.4;
+}
+.aitf-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 99px;
+  background: var(--aitf-accent);
+  animation: aitf-breathe 1.4s ease-in-out infinite;
+}
+@keyframes aitf-breathe {
+  50% {
+    opacity: 0.25;
+    transform: scale(0.7);
+  }
+}
+html[data-aitf-motion='reduced'] .aitf-dot {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-aitf-motion='full']) .aitf-dot {
+    animation: none;
+  }
+}
+
+/* Drawn in a cell rather than an article, so it carries the article's inset. */
+.aitf-banner-cell {
+  padding-inline: calc(16px + var(--aitf-inset, 0px));
+}
+
+/* The revealed strip sits where the banner was, at the same rhythm, and the
+   disclosure grows beneath it in flow: nothing floats, nothing can be clipped. */
+.aitf-recourse {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 16px 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.aitf-recourse-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 360px);
+  padding: 4px;
+  border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, currentColor 4%, transparent);
+  animation: aitf-panel-in 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes aitf-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+html[data-aitf-motion='reduced'] .aitf-recourse-panel {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-aitf-motion='full']) .aitf-recourse-panel {
+    animation: none;
+  }
+}
+.aitf-check {
+  appearance: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms ease-out;
+}
+.aitf-check:hover,
+.aitf-check:focus-visible {
+  background: color-mix(in srgb, currentColor 7%, transparent);
+}
+.aitf-check:focus-visible {
+  outline: 2px solid var(--aitf-accent);
+  outline-offset: -2px;
+}
+.aitf-check[aria-disabled='true'] {
+  opacity: 0.6;
+  cursor: wait;
+}
+.aitf-check-box {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border: 1.5px solid color-mix(in srgb, currentColor 40%, transparent);
+  border-radius: 6px;
+  color: transparent;
+  transition:
+    background-color 140ms ease-out,
+    border-color 140ms ease-out,
+    color 140ms ease-out;
+}
+.aitf-check-box svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2.4;
+}
+.aitf-check[aria-checked='true'] .aitf-check-box {
+  border-color: var(--aitf-accent);
+  background: var(--aitf-accent);
+  color: #fff;
+}
+.aitf-check-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.aitf-check-text > span {
+  font-weight: 600;
+}
+.aitf-check-text small {
+  font-size: 12px;
+  opacity: 0.6;
 }
 .aitf-show:hover,
 .aitf-pill:hover:not(:disabled) {

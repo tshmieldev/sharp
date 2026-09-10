@@ -48,3 +48,26 @@ it('adds author rules below the native actions in an already-open menu', async (
     rule: 'block',
   });
 });
+
+it('offers to teach the model only when a model is configured', () => {
+  const { chrome } = mockChrome();
+  chrome.runtime.sendMessage.mockResolvedValue({ ok: true });
+  document.body.innerHTML = `<div id="layers"><div role="menu"><div data-testid="Dropdown">
+      <div role="menuitem"><span>Mute</span></div>
+      <a role="menuitem" data-testid="tweetEngagements"
+        href="/alice/status/42/quotes">View post activity</a>
+    </div></div></div>`;
+  const correct = vi.fn();
+  act(() => {
+    dispose = installPostMenu(() => publicSettings(defaults), correct);
+  });
+  expect([...document.querySelectorAll('.aitf-menu-action')]).toHaveLength(2);
+  act(dispose);
+  act(() => {
+    dispose = installPostMenu(() => ({ ...publicSettings(defaults), configured: true }), correct);
+  });
+  const rows = [...document.querySelectorAll<HTMLButtonElement>('.aitf-menu-action')];
+  expect(rows.map((row) => row.textContent)).toContain('Hide posts like this');
+  act(() => rows.at(-1)!.click());
+  expect(correct).toHaveBeenCalledWith('42', 'hide');
+});
