@@ -13,6 +13,12 @@ Describe what you want to see — or never see again — in plain language.
   <img height="36" src="https://storage.ko-fi.com/cdn/kofi3.png?v=6" alt="Buy me a coffee at ko-fi.com">
 </a>
 
+<br><br>
+
+<img src="store/promo.gif" width="800" alt="Typing a filter into Sharp, then posts collapsing on the X timeline">
+
+<sub><a href="store/promo-0.2.0.mp4">Watch in full quality</a></sub>
+
 </div>
 
 ---
