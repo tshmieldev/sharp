@@ -543,3 +543,32 @@ html[data-aitf-motion='reduced'] .aitf-recourse-panel {
   font-size: 12.5px;
   opacity: 0.6;
 }
+
+/* Misc: colour washed out of the chrome, the content, or both. Filters are
+   placed on the pieces themselves, never on <html> or <body>: a filtered
+   ancestor becomes the containing block of X's fixed layers. */
+html[data-aitf-grey-ui] header[role='banner'],
+html[data-aitf-grey-ui] [data-testid='sidebarColumn'],
+html[data-aitf-grey-ui] [data-testid='primaryColumn'] nav[role='navigation'],
+html[data-aitf-grey-ui] [data-testid='BottomBar'],
+html[data-aitf-grey-ui] [data-testid='toolBar'],
+html[data-aitf-grey-ui] [data-testid='tweetButtonInline'],
+html[data-aitf-grey-ui] [data-testid='Tweet-User-Avatar'],
+html[data-aitf-grey-ui] [data-testid^='UserAvatar-Container'],
+html[data-aitf-grey-ui] [data-testid='User-Name'] svg,
+html[data-aitf-grey-ui] article [role='group'],
+html[data-aitf-grey-ui] [data-testid='caret'],
+html[data-aitf-grey-ui] #layers [data-testid='Dropdown'],
+html[data-aitf-grey-ui] #layers [role='menu'] {
+  filter: grayscale(1) !important;
+}
+html[data-aitf-grey-content] [data-testid='tweetText'],
+html[data-aitf-grey-content] [data-testid='tweetPhoto'],
+html[data-aitf-grey-content] [data-testid='videoPlayer'],
+html[data-aitf-grey-content] [data-testid='videoComponent'],
+html[data-aitf-grey-content] [data-testid='card.wrapper'],
+html[data-aitf-grey-content] [data-testid='card.layoutLarge.media'],
+html[data-aitf-grey-content] [data-testid='card.layoutSmall.media'],
+html[data-aitf-grey-content] [data-testid='swipe-to-dismiss'] {
+  filter: grayscale(1) !important;
+}

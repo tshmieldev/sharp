@@ -55,6 +55,16 @@ export const Settings = Schema.Struct({
   favorites: Schema.Array(Favorite),
   batchSize: boundedInt(1, 30),
   concurrency: boundedInt(1, 6),
+  // YouTube: plain page rules, applied by the stylesheet alone.
+  youtubeEnabled: Schema.Boolean,
+  hideShorts: Schema.Boolean,
+  thumbnails: Schema.Literal('shown', 'blurred', 'hidden'),
+  hideComments: Schema.Boolean,
+  // Misc page rules, per site: wash the chrome, the content, or both, of colour.
+  greyscaleUi: Schema.Boolean,
+  greyscaleContent: Schema.Boolean,
+  youtubeGreyscaleUi: Schema.Boolean,
+  youtubeGreyscaleContent: Schema.Boolean,
 });
 export type Settings = typeof Settings.Type;
 export const SettingsPatch = Schema.partial(Settings);
@@ -87,6 +97,14 @@ export const defaults: Settings = {
   favorites: [],
   batchSize: 12,
   concurrency: 3,
+  youtubeEnabled: true,
+  hideShorts: false,
+  thumbnails: 'shown',
+  hideComments: false,
+  greyscaleUi: false,
+  greyscaleContent: false,
+  youtubeGreyscaleUi: false,
+  youtubeGreyscaleContent: false,
 };
 
 /** How much to spend on speed. Bigger batches mean fewer requests, and each

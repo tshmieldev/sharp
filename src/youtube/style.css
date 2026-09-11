@@ -1,0 +1,164 @@
+/* YouTube rules are plain CSS keyed on attributes the content script sets on
+   <html>. Nothing here runs a model; each attribute is one popup toggle. */
+
+/* Shorts: the shelf, the sidebar entries, the Shorts tab on channels and any
+   single Short that lands in a feed, search results or notifications. */
+html[data-aitf-yt-shorts] ytd-rich-shelf-renderer[is-shorts],
+html[data-aitf-yt-shorts] ytd-rich-section-renderer:has(ytd-rich-shelf-renderer[is-shorts]),
+html[data-aitf-yt-shorts] ytd-reel-shelf-renderer,
+html[data-aitf-yt-shorts]
+  ytd-item-section-renderer:has(> #contents > ytd-reel-shelf-renderer:only-child),
+html[data-aitf-yt-shorts] grid-shelf-view-model:has(a[href^='/shorts/']),
+html[data-aitf-yt-shorts] ytd-rich-item-renderer:has(a[href^='/shorts/']),
+html[data-aitf-yt-shorts] ytd-video-renderer:has(a[href^='/shorts/']),
+html[data-aitf-yt-shorts] ytd-grid-video-renderer:has(a[href^='/shorts/']),
+html[data-aitf-yt-shorts] ytd-compact-video-renderer:has(a[href^='/shorts/']),
+html[data-aitf-yt-shorts] yt-lockup-view-model:has(a[href^='/shorts/']),
+html[data-aitf-yt-shorts] ytd-notification-renderer:has(a[href^='/shorts/']),
+html[data-aitf-yt-shorts] ytd-guide-entry-renderer:has(a[title='Shorts']),
+html[data-aitf-yt-shorts] ytd-guide-entry-renderer:has(a[href='/shorts']),
+html[data-aitf-yt-shorts] ytd-mini-guide-entry-renderer:has(a[title='Shorts']),
+html[data-aitf-yt-shorts] ytd-mini-guide-entry-renderer:has(a[href='/shorts']),
+html[data-aitf-yt-shorts] yt-tab-shape[tab-title='Shorts'],
+html[data-aitf-yt-shorts] yt-chip-cloud-chip-renderer:has(yt-formatted-string[title='Shorts']) {
+  display: none !important;
+}
+
+/* Thumbnails, blurred: the picture is a wash of colour; every badge on it
+   (duration, live, watched) is untouched, so cards still scan. */
+html[data-aitf-yt-thumbs='blurred'] yt-thumbnail-view-model,
+html[data-aitf-yt-thumbs='blurred'] ytd-thumbnail,
+html[data-aitf-yt-thumbs='blurred'] ytd-playlist-thumbnail {
+  overflow: hidden !important;
+  border-radius: 12px;
+}
+html[data-aitf-yt-thumbs='blurred'] .ytThumbnailViewModelImage,
+html[data-aitf-yt-thumbs='blurred'] ytd-thumbnail yt-image,
+html[data-aitf-yt-thumbs='blurred'] ytd-thumbnail img,
+html[data-aitf-yt-thumbs='blurred'] ytd-playlist-thumbnail img,
+html[data-aitf-yt-thumbs='blurred'] .shortsLockupViewModelHostThumbnailParentContainer img {
+  filter: blur(22px) saturate(0.7) !important;
+  transform: scale(1.15);
+}
+
+/* Thumbnails, hidden: the picture is gone and the card gives up its height.
+   What was drawn over the picture is laid out in a slim strip instead, so the
+   duration stays exactly where the eye expects it: bottom right. */
+html[data-aitf-yt-thumbs='hidden'] yt-thumbnail-view-model,
+html[data-aitf-yt-thumbs='hidden'] ytd-thumbnail,
+html[data-aitf-yt-thumbs='hidden'] ytd-playlist-thumbnail {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-end !important;
+  justify-content: flex-end !important;
+  aspect-ratio: auto !important;
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 4px 0 !important;
+  border-radius: 0 !important;
+  background: none !important;
+}
+/* The duration badge gets a YouTube-style edge of its own, so it reads as a
+   chip that belongs to the card rather than a number floating in space. */
+html[data-aitf-yt-thumbs='hidden'] yt-thumbnail-view-model badge-shape,
+html[data-aitf-yt-thumbs='hidden']
+  ytd-thumbnail
+  ytd-thumbnail-overlay-time-status-renderer
+  #time-status {
+  border: 1px solid var(--yt-spec-10-percent-layer, rgba(128, 128, 128, 0.2)) !important;
+  border-radius: 6px !important;
+}
+html[data-aitf-yt-thumbs='hidden'] .ytThumbnailViewModelImage,
+html[data-aitf-yt-thumbs='hidden'] ytd-thumbnail yt-image,
+html[data-aitf-yt-thumbs='hidden'] ytd-thumbnail img,
+html[data-aitf-yt-thumbs='hidden'] ytd-playlist-thumbnail yt-image,
+html[data-aitf-yt-thumbs='hidden'] ytd-playlist-thumbnail img,
+html[data-aitf-yt-thumbs='hidden'] .shortsLockupViewModelHostThumbnailParentContainer img,
+html[data-aitf-yt-thumbs='hidden'] yt-thumbnail-overlay-progress-bar-view-model,
+html[data-aitf-yt-thumbs='hidden'] ytd-thumbnail-overlay-resume-playback-renderer,
+html[data-aitf-yt-thumbs='hidden'] ytd-thumbnail-overlay-toggle-button-renderer,
+html[data-aitf-yt-thumbs='hidden'] ytd-thumbnail-overlay-now-playing-renderer,
+html[data-aitf-yt-thumbs='hidden'] .ytThumbnailViewModelHostAdDisclosureBannerContainer,
+html[data-aitf-yt-thumbs='hidden'] thumbnail-overlay-button-view-model {
+  display: none !important;
+}
+html[data-aitf-yt-thumbs='hidden'] yt-thumbnail-bottom-overlay-view-model,
+html[data-aitf-yt-thumbs='hidden'] yt-thumbnail-overlay-badge-view-model,
+html[data-aitf-yt-thumbs='hidden'] .ytThumbnailBottomOverlayViewModelBadgeContainer,
+html[data-aitf-yt-thumbs='hidden'] ytd-thumbnail #overlays,
+html[data-aitf-yt-thumbs='hidden'] ytd-thumbnail-overlay-time-status-renderer {
+  position: static !important;
+  inset: auto !important;
+  margin: 0 !important;
+  display: flex !important;
+  justify-content: flex-end !important;
+}
+html[data-aitf-yt-thumbs='hidden'] .ytLockupViewModelContentImage,
+html[data-aitf-yt-thumbs='hidden'] .ytLockupViewModelContentImage *,
+html[data-aitf-yt-thumbs='hidden'] ytd-thumbnail a,
+html[data-aitf-yt-thumbs='hidden'] ytd-thumbnail a *,
+html[data-aitf-yt-thumbs='hidden'] .shortsLockupViewModelHostEndpoint {
+  text-decoration: none !important;
+}
+html[data-aitf-yt-thumbs='hidden'] .shortsLockupViewModelHostThumbnailParentContainer {
+  aspect-ratio: auto !important;
+  height: auto !important;
+  min-height: 0 !important;
+}
+
+/* Hover previews are pictures too. */
+html[data-aitf-yt-thumbs] ytd-moving-thumbnail-renderer,
+html[data-aitf-yt-thumbs] ytd-video-preview,
+html[data-aitf-yt-thumbs] #video-preview,
+html[data-aitf-yt-thumbs] ytd-thumbnail #mouseover-overlay {
+  display: none !important;
+}
+
+/* Comments: under a video, on a Short, and the teaser YouTube shows above them. */
+html[data-aitf-yt-comments] ytd-comments#comments,
+html[data-aitf-yt-comments] ytd-comments-entry-point-header-renderer,
+html[data-aitf-yt-comments]
+  ytd-engagement-panel-section-list-renderer[target-id='engagement-panel-comments-section'],
+html[data-aitf-yt-comments] ytd-reel-player-overlay-renderer #comments-button {
+  display: none !important;
+}
+
+/* Misc: colour washed out of the chrome, the content, or both. Filters go on
+   the pieces themselves; a filtered ancestor would pin YouTube's fixed masthead. */
+html[data-aitf-yt-grey-ui] ytd-masthead,
+html[data-aitf-yt-grey-ui] #guide,
+html[data-aitf-yt-grey-ui] tp-yt-app-drawer,
+html[data-aitf-yt-grey-ui] ytd-mini-guide-renderer,
+html[data-aitf-yt-grey-ui] #chips,
+html[data-aitf-yt-grey-ui] yt-chip-cloud-chip-renderer,
+html[data-aitf-yt-grey-ui] yt-avatar-shape,
+html[data-aitf-yt-grey-ui] yt-img-shadow#avatar,
+html[data-aitf-yt-grey-ui] #author-thumbnail,
+html[data-aitf-yt-grey-ui] .ytLockupMetadataViewModelAvatar,
+html[data-aitf-yt-grey-ui] ytd-video-owner-renderer,
+html[data-aitf-yt-grey-ui] ytd-watch-metadata #actions,
+html[data-aitf-yt-grey-ui] ytd-menu-renderer,
+html[data-aitf-yt-grey-ui] .ytLockupMetadataViewModelMenuButton,
+html[data-aitf-yt-grey-ui] ytd-badge-supported-renderer,
+html[data-aitf-yt-grey-ui] .ytAttributedStringImageElement,
+html[data-aitf-yt-grey-ui] ytd-reel-player-overlay-renderer,
+html[data-aitf-yt-grey-ui] tp-yt-paper-dialog,
+html[data-aitf-yt-grey-ui] tp-yt-iron-dropdown,
+html[data-aitf-yt-grey-ui] yt-touch-feedback-shape,
+html[data-aitf-yt-grey-ui] badge-shape,
+html[data-aitf-yt-grey-ui] yt-thumbnail-bottom-overlay-view-model,
+html[data-aitf-yt-grey-ui] yt-thumbnail-overlay-badge-view-model,
+html[data-aitf-yt-grey-ui] ytd-thumbnail #overlays {
+  filter: grayscale(1) !important;
+}
+html[data-aitf-yt-grey-content] yt-thumbnail-view-model,
+html[data-aitf-yt-grey-content] ytd-thumbnail,
+html[data-aitf-yt-grey-content] ytd-playlist-thumbnail,
+html[data-aitf-yt-grey-content] ytd-player,
+html[data-aitf-yt-grey-content] #movie_player,
+html[data-aitf-yt-grey-content] ytd-reel-video-renderer #player-container,
+html[data-aitf-yt-grey-content] ytd-post-renderer #content-attachment,
+html[data-aitf-yt-grey-content] ytd-backstage-image-renderer,
+html[data-aitf-yt-grey-content] ytd-video-preview {
+  filter: grayscale(1) !important;
+}

@@ -281,7 +281,10 @@ export function applyFeedback(cell: HTMLElement, state: FeedbackState) {
   cell.prepend(root);
   cell.dataset.aitfHidden = state.style;
   mounted.set(cell, { root, signature });
-  if (state.style === 'remove') return;
+  if (state.style !== 'remove') renderFeedback(root, state);
+}
+
+function renderFeedback(root: HTMLElement, state: FeedbackState) {
   render(
     <div class="aitf-banner aitf-banner-cell" data-acked={state.acked ? 'true' : 'false'}>
       <Mark />

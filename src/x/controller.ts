@@ -35,7 +35,22 @@ const BATCH_WINDOW = 200;
 const FEEDBACK_WAIT = 8000;
 // Acknowledged claims live for the tab; this bounds them on long sessions.
 const MAX_TOLD = 600;
+// After a navigation X remounts the list and restores the scroll position over
+// the next second or so. Nothing Sharp does may move cells until then.
+const NAV_SETTLE = 1500;
+// How long after a return to Home the reader's anchor post is still worth
+// putting back. Later than this they have moved on.
+const RESTORE_WINDOW = 3000;
+const isHome = (path: string) => /^\/home\/?$/.test(path);
+type Anchor = { id: string; top: number };
 const cellSelector = '[data-testid="cellInnerDiv"]';
+/** X's acknowledgement in a timeline cell: no post, and an Undo to take it back. */
+function isFeedbackCard(cell: HTMLElement): boolean {
+  if (cell.querySelector(extract.articleSelector)) return false;
+  return [...cell.querySelectorAll<HTMLElement>('[role="button"], button')].some(
+    (button) => !button.closest('.aitf-slot') && /^undo$/i.test(button.textContent?.trim() ?? ''),
+  );
+}
 type Told = {
   id: string;
   cell: HTMLElement;
@@ -44,6 +59,13 @@ type Told = {
   previous: Element | null;
   at: number;
   acked: boolean;
+  /** Reported over the wire: the post stays in its cell until X rebuilds the
+   *  timeline and draws its card from the server's memory of the report. */
+  wire?: boolean;
+  /** X's card has been seen in this spot at least once. */
+  carded?: boolean;
+  /** A card Sharp could not tie to a post. Dressed while it lasts, never relocated. */
+  anonymous?: boolean;
   /** Lazily built matcher for X's "Show fewer posts from <handle>". */
   named?: RegExp;
 };
@@ -57,6 +79,11 @@ export class TimelineController {
   private threadContext = new Set<string>();
   private path = '';
   private openedAt = 0;
+  /** The post at the top of the viewport while on Home, refreshed each scan. */
+  private homeAnchor: Anchor | null = null;
+  /** The anchor being put back after a return to Home, until the window ends. */
+  private restoring: Anchor | null = null;
+  private restoreUntil = 0;
   private generation = 0;
   private refreshing = 0;
   private inFlight = 0;
@@ -70,30 +97,44 @@ export class TimelineController {
   private readonly notInterested = new NotInterested({
     // Take the spot while the post is still in the page: X may swap it for
     // its card synchronously inside the click that follows.
-    before: (article, id) => {
-      const cell = article.closest<HTMLElement>(cellSelector);
-      if (!cell?.isConnected || !cell.parentElement) return;
-      this.told.set(id, {
-        id,
-        cell,
-        parent: cell.parentElement,
-        index: [...cell.parentElement.children].indexOf(cell),
-        previous: cell.previousElementSibling,
-        at: Date.now(),
-        acked: false,
-      });
-      if (this.told.size > MAX_TOLD) {
-        const oldest = this.told.keys().next().value;
-        if (oldest !== undefined) this.told.delete(oldest);
-      }
-      this.syncFeedback();
-    },
+    before: (article, id) => this.claim(article, id, false),
     after: () => this.syncFeedback(),
   });
+
+  /** Only a menu click needs the per-mutation sync: X may swap that cell any
+   *  moment. Wire claims wait for the throttled scan. */
+  private menuClaims(): boolean {
+    for (const entry of this.told.values()) if (!entry.wire) return true;
+    return false;
+  }
+
+  /** Remember where a reported post sits, so X's card can be dressed when it
+   *  appears there: right after a menu click, or whenever X rebuilds the
+   *  timeline after a wire report. */
+  private claim(article: HTMLElement, id: string, wire: boolean) {
+    const cell = article.closest<HTMLElement>(cellSelector);
+    if (!cell?.isConnected || !cell.parentElement) return;
+    this.told.set(id, {
+      id,
+      cell,
+      parent: cell.parentElement,
+      index: [...cell.parentElement.children].indexOf(cell),
+      previous: cell.previousElementSibling,
+      at: Date.now(),
+      acked: wire,
+      wire,
+    });
+    if (this.told.size > MAX_TOLD) {
+      const oldest = this.told.keys().next().value;
+      if (oldest !== undefined) this.told.delete(oldest);
+    }
+    this.syncFeedback();
+  }
   /** Posts told to X, by post id. The cell is claimed at click time and held
    *  through X's answer; X may swap the cell's contents or the cell itself, so
    *  the spot is also remembered by neighbours. */
   private told = new Map<string, Told>();
+  private anonymousCards = 0;
   /** X's own request, sent directly: no menu, no card, no cell to claim. The
    *  menu is the fallback when the wire has not supplied what it needs. */
   private readonly feedback = new Feedback();
@@ -117,15 +158,30 @@ export class TimelineController {
     this.observer = new MutationObserver((mutations) => {
       // A swapped cell must be re-claimed before this frame paints. Only the
       // O(1) part runs here; the page-wide lookup waits for the throttled scan.
-      if (this.told.size) this.syncFeedback(false);
-      if (
-        mutations.some(
-          (mutation) =>
-            !(mutation.target instanceof Element && mutation.target.closest('.aitf-slot')),
-        )
-      ) {
-        this.scheduleScan();
+      if (this.menuClaims()) this.syncFeedback(false);
+      let relevant = false;
+      let fresh = false;
+      for (const mutation of mutations) {
+        if (mutation.target instanceof Element && mutation.target.closest('.aitf-slot')) continue;
+        relevant = true;
+        for (const node of mutation.addedNodes) {
+          if (!(node instanceof Element)) continue;
+          const article = node.matches(extract.articleSelector)
+            ? node
+            : node.querySelector(extract.articleSelector);
+          if (article && !article.querySelector(':scope > .aitf-slot')) {
+            fresh = true;
+            break;
+          }
+        }
+        if (fresh) break;
       }
+      // A post that just mounted with a verdict already known must take its
+      // final height before X measures it at the next layout. Otherwise X
+      // caches the full height, positions the list on it, then re-lays
+      // everything out when Sharp collapses the post a moment later.
+      if (fresh) this.scan();
+      else if (relevant) this.scheduleScan();
     });
     this.observer.observe(document.documentElement, {
       childList: true,
@@ -139,8 +195,20 @@ export class TimelineController {
     chrome.storage?.onChanged?.addListener(this.onStorage);
     window.addEventListener('pagehide', this.onPageHide);
     window.addEventListener('pageshow', this.onPageShow);
+    for (const type of ['wheel', 'touchstart', 'keydown'] as const)
+      window.addEventListener(type, this.onReaderScroll, { passive: true, capture: true });
+    window.addEventListener('pointerdown', this.onPointerDown, { passive: true, capture: true });
     this.scan();
   }
+
+  /** The reader took over; the anchor is no longer theirs to be held at. */
+  private onReaderScroll = () => {
+    this.restoring = null;
+  };
+  /** A click may be the one that leaves Home: remember where the reader is. */
+  private onPointerDown = () => {
+    if (isHome(this.path) && !this.restoring) this.homeAnchor = this.anchorInView();
+  };
 
   private onStorage = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
     if (area === 'local' && changes.settings) void this.refresh();
@@ -168,6 +236,10 @@ export class TimelineController {
       this.settings = settings;
       this.rules = createRules(settings);
       document.documentElement.dataset.aitfMotion = settings.motion;
+      if (settings.greyscaleUi) document.documentElement.dataset.aitfGreyUi = '';
+      else delete document.documentElement.dataset.aitfGreyUi;
+      if (settings.greyscaleContent) document.documentElement.dataset.aitfGreyContent = '';
+      else delete document.documentElement.dataset.aitfGreyContent;
       this.scan();
     } catch {
       // An invalidated extension context cannot recover without reloading the tab.
@@ -185,6 +257,10 @@ export class TimelineController {
     chrome.storage?.onChanged?.removeListener(this.onStorage);
     window.removeEventListener('pagehide', this.onPageHide);
     window.removeEventListener('pageshow', this.onPageShow);
+    for (const type of ['wheel', 'touchstart', 'keydown'] as const)
+      window.removeEventListener(type, this.onReaderScroll, { capture: true });
+    window.removeEventListener('pointerdown', this.onPointerDown, { capture: true });
+    this.restoring = null;
     this.records.clear();
     this.told.clear();
     this.reported.clear();
@@ -193,6 +269,8 @@ export class TimelineController {
     this.notInterested.stop();
     this.feedback.stop();
     delete document.documentElement.dataset.aitfMotion;
+    delete document.documentElement.dataset.aitfGreyUi;
+    delete document.documentElement.dataset.aitfGreyContent;
     view.restoreAll();
   }
 
@@ -272,9 +350,14 @@ export class TimelineController {
     this.scannedAt = Date.now();
     this.threadControl.update(this.settings);
     if (this.path !== location.pathname) {
+      const returning = isHome(location.pathname) && this.path !== '' && !isHome(this.path);
       this.path = location.pathname;
       this.openedAt = Date.now();
       this.threadContext.clear();
+      if (returning && this.homeAnchor) {
+        this.restoring = this.homeAnchor;
+        this.restoreUntil = this.openedAt + RESTORE_WINDOW;
+      }
     }
     const thread = extract.currentThread();
     const focal = extract.focalArticle(thread);
@@ -376,6 +459,33 @@ export class TimelineController {
     }
     this.syncFeedback();
     this.scheduleFlush();
+    this.restoreAnchor();
+  }
+
+  /** The post at the top of the viewport, by id, with its offset. */
+  private anchorInView(): Anchor | null {
+    let best: Anchor | null = null;
+    for (const article of document.querySelectorAll<HTMLElement>(extract.articleSelector)) {
+      const rect = article.getBoundingClientRect();
+      if (rect.bottom <= 0 || (best && rect.top >= best.top)) continue;
+      const id = extract.postId(article);
+      if (id) best = { id, top: rect.top };
+    }
+    return best;
+  }
+
+  /** Once X has finished its own restore after a return to Home, check the
+   *  reader's anchor post once and nudge it back if X missed. */
+  private restoreAnchor() {
+    if (!this.restoring) return;
+    const now = Date.now();
+    if (now < this.openedAt + NAV_SETTLE) return;
+    const anchor = this.restoring;
+    this.restoring = null;
+    if (now >= this.restoreUntil) return;
+    const article = extract.focalArticle(anchor.id);
+    const shift = article ? article.getBoundingClientRect().top - anchor.top : 0;
+    if (Math.abs(shift) >= 24) window.scrollBy(0, shift);
   }
 
   /** Tell X once per post. Over the wire when the page has given up the
@@ -393,6 +503,10 @@ export class TimelineController {
       if (this.stopped) return;
       if (ok) {
         this.reported.set(key, 'told');
+        // X's client knows nothing of this, but its server does: the next
+        // timeline rebuild draws X's card here. Claim the spot now.
+        const current = extract.focalArticle(key);
+        if (current) this.claim(current, key, true);
       } else {
         this.reported.delete(key);
         const current = extract.focalArticle(key);
@@ -400,6 +514,90 @@ export class TimelineController {
       }
       this.scheduleScan();
     });
+  }
+
+  /** X's card for a reported post carries no post id. After a rebuild (back
+   *  from a thread, a reload) the server redraws every card from its memory,
+   *  so the id comes from the wire: the entries it placed between the card's
+   *  nearest identified neighbours. A run of cards maps onto a run of ids.
+   *  Cells are taken in visual order; X recycles nodes, so DOM order lies. */
+  private adoptCards() {
+    const claimed = new Set([...this.told.values()].map((entry) => entry.cell));
+    const all = [...document.querySelectorAll<HTMLElement>(cellSelector)];
+    // Layout is only forced when there is a card nobody has claimed yet.
+    if (!all.some((cell) => !claimed.has(cell) && isFeedbackCard(cell))) return;
+    const cells = all
+      .map((cell) => ({ cell, top: cell.getBoundingClientRect().top }))
+      .sort((a, b) => a.top - b.top)
+      .map(({ cell }) => cell);
+    const idOf = (cell: HTMLElement) => {
+      const article = cell.querySelector<HTMLElement>(extract.articleSelector);
+      return article ? extract.postId(article) : '';
+    };
+    const known = (id: string) =>
+      this.reported.has(id) || this.told.has(id) || this.hiddenInfo.has(id);
+    const adopt = (cell: HTMLElement, id: string) => {
+      if (!cell.parentElement) return;
+      const existing = id ? this.told.get(id) : undefined;
+      const entry: Told = existing ?? {
+        id: id || `card:${++this.anonymousCards}`,
+        cell,
+        parent: cell.parentElement,
+        index: 0,
+        previous: null,
+        at: Date.now(),
+        acked: true,
+        wire: true,
+        anonymous: !id,
+      };
+      entry.cell = cell;
+      entry.parent = cell.parentElement;
+      entry.index = [...cell.parentElement.children].indexOf(cell);
+      entry.previous = cell.previousElementSibling;
+      entry.acked = true;
+      entry.carded = true;
+      this.told.set(entry.id, entry);
+      claimed.add(cell);
+    };
+
+    // First by neighbours: a run of cards between two identified posts.
+    const unmatched: HTMLElement[] = [];
+    let start = -1;
+    for (let index = 0; index <= cells.length; index++) {
+      const current = cells[index];
+      const card = current !== undefined && isFeedbackCard(current);
+      if (card && start < 0) start = index;
+      if (card || start < 0) continue;
+      const end = index - 1;
+      const before = cells[start - 1];
+      const previous = before ? idOf(before) : '';
+      const next = current ? idOf(current) : '';
+      const count = end - start + 1;
+      let ids = previous || next ? this.feedback.between(previous, next) : [];
+      if (ids.length !== count) ids = ids.filter(known);
+      for (let offset = 0; offset < count; offset++) {
+        const cell = cells[start + offset];
+        if (!cell || claimed.has(cell)) continue;
+        const id = ids.length === count ? ids[offset] : '';
+        if (id) adopt(cell, id);
+        else unmatched.push(cell);
+      }
+      start = -1;
+    }
+    if (!unmatched.length) return;
+
+    // Then page-wide: every reported post that is neither on screen as a post
+    // nor already tied to a card, in the wire's order, against the cards left.
+    const visible = new Set(cells.map(idOf));
+    const candidates = [...new Set([...this.reported.keys(), ...this.told.keys()])].filter(
+      (id) => !id.startsWith('card:') && !visible.has(id) && !this.told.get(id)?.cell.isConnected,
+    );
+    const ranked = this.feedback.rank(candidates);
+    if (ranked.length === unmatched.length) {
+      unmatched.forEach((cell, index) => adopt(cell, ranked[index] ?? ''));
+      return;
+    }
+    for (const cell of unmatched) adopt(cell, '');
   }
 
   /** When X replaces the whole cell, the new one sits where the old one did.
@@ -437,10 +635,18 @@ export class TimelineController {
    *  back when X recycles it for a post, the reader undoes, or X never answers. */
   private syncFeedback(thorough = true) {
     if (!this.settings) return;
+    if (thorough && this.settings.notInterested && Date.now() - this.openedAt > NAV_SETTLE)
+      this.adoptCards();
     const now = Date.now();
     let taken: Set<HTMLElement> | null = null;
     for (const [id, entry] of this.told) {
       if (!entry.cell.isConnected) {
+        if (entry.anonymous) {
+          this.told.delete(id);
+          continue;
+        }
+        // A wire report's card is tied back by the wire's order, not by spot.
+        if (entry.wire) continue;
         taken ??= new Set([...this.told.values()].map((other) => other.cell));
         const cell = this.cellAtSpot(entry, thorough, taken);
         if (cell) {
@@ -457,6 +663,8 @@ export class TimelineController {
       const article = entry.cell.querySelector<HTMLElement>(extract.articleSelector);
       if (article) {
         const same = extract.postId(article) === id;
+        // A wire report leaves the post in place; the banner is the record's.
+        if (same && entry.wire && !entry.carded) continue;
         if (same && entry.acked) {
           // Undo brought the post back: the verdict stands, the claim is over.
           view.clearFeedback(entry.cell);
@@ -472,8 +680,9 @@ export class TimelineController {
           else this.told.delete(id);
           continue;
         }
-      } else if (entry.cell.querySelector('[role="button"], button')) {
-        entry.acked = true;
+      } else {
+        entry.carded = true;
+        if (entry.cell.querySelector('[role="button"], button')) entry.acked = true;
       }
       const info = this.hiddenInfo.get(id) ?? {
         handle: '',

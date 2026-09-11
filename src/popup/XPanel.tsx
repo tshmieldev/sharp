@@ -394,7 +394,7 @@ export function XPanel({
         />
         <ToggleRow
           label="Hide completely when the model is sure"
-          hint="No banner and no Show button. A post the model calls a close one keeps its banner, marked with a question instead of the gavel."
+          hint="Blocked posts not visible at all if the model is sure"
           checked={settings.hideFully}
           onChange={(value) => update('hideFully', value)}
         />
@@ -407,6 +407,20 @@ export function XPanel({
           hint="Needs a vision-capable model and costs more per post."
           checked={settings.analyzeImages}
           onChange={(value) => update('analyzeImages', value)}
+        />
+      </section>
+
+      <section class="group">
+        <h2>Misc</h2>
+        <ToggleRow
+          label="Greyscale UI"
+          checked={settings.greyscaleUi}
+          onChange={(value) => update('greyscaleUi', value)}
+        />
+        <ToggleRow
+          label="Greyscale content"
+          checked={settings.greyscaleContent}
+          onChange={(value) => update('greyscaleContent', value)}
         />
       </section>
     </div>

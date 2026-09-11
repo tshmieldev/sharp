@@ -69,15 +69,26 @@ src/
   x/
     index.ts    Explicit X adapter startup and teardown
     ...         X DOM extraction, local rules, timeline lifecycle, in-page UI
+  youtube/      Toggle-driven page rules: three attributes on <html>, one stylesheet
   popup/        Rail, per-site and general sections, model browser, list sheets
 tests/          Focused provider/storage, cache, RPC and menu checks
 scripts/        Three-entry extension build, and the icon generator
 ```
 
 **Site entry points are inert until called.** `src/index.ts` dispatches HTTPS
-`x.com` and `twitter.com` to `startX()`; importing `src/x/index.ts` alone installs
-no listeners or observers. The background worker and popup remain separate
-extension entry points.
+`x.com` and `twitter.com` to `startX()` and `www.youtube.com` to `startYouTube()`;
+importing a site entry alone installs no listeners or observers. The background
+worker and popup remain separate extension entry points.
+
+**YouTube is rules only.** The adapter reads public settings, sets
+`data-aitf-yt-shorts` and `data-aitf-yt-comments` on `<html>`, plus
+`data-aitf-yt-thumbs="blurred"` or `"hidden"`, and follows storage changes.
+Hidden thumbnails give up their height; the badges that sat on the picture
+(duration, live) are re-laid as a slim strip so the duration stays bottom-right. Everything visible is `src/youtube/style.css`,
+keyed on those attributes. No model, no DOM walking, nothing to schedule. YouTube's
+markup mixes Polymer `ytd-*` elements with newer `*-view-model` ones; selectors
+cover both, and a Short is recognised by its `/shorts/` link rather than its
+container, so it survives layout renames.
 
 To add a site, create `src/<site>/index.ts` with an explicit startup function,
 add its exact hostname to the dispatcher, and add the necessary matches and host
@@ -85,8 +96,8 @@ permissions to `manifest.json`. Keep selectors and page UI inside the site folde
 Shared schemas still describe this extension's current filtering model; a future
 adapter that needs different author identities or site-specific settings should
 extend that model explicitly, not reuse X's DOM assumptions. Settings that read
-as per-site in the popup — filtering on/off, image analysis — are still stored
-flat, because X is the only adapter.
+as per-site in the popup — filtering on/off, image analysis, the YouTube toggles —
+are still stored flat; the popup's rail decides which ones each section shows.
 
 **Effect owns external operations:** typed provider/storage failures, abortable
 fetches, deadlines, and semaphore-protected writes. Chrome listeners and Preact
@@ -104,6 +115,17 @@ with `visibility`, and the skeleton is drawn over it from inside the article.
 Nothing resizes when a verdict says show, so X's virtualiser never re-measures
 the column and the scroll position holds. Only a confirmed hide resizes anything.
 Presentation uses scoped CSS attributes rather than overwriting X's inline styles.
+
+**A known verdict is applied before X measures the post.** X positions
+timeline cells from heights it measures on mount and caches, and it restores
+the scroll position from those heights after a navigation. When a mutation
+adds a post whose verdict is already known, the controller scans synchronously
+inside the mutation callback, before the next layout, so the post is already
+collapsed when X first measures it. Otherwise X caches the full height, restores
+onto it, and re-lays out the whole list when the post collapses a moment later,
+which lands the reader somewhere else after backing out of a thread. As a
+backstop, the post at the top of the viewport is remembered on the click that
+leaves Home and nudged back once after X's restore, unless the reader scrolls.
 
 **The rendered menu is the source of truth.** After settings load, an observer
 watches X's `#layers` portal and direct ancestor removal/visibility. If the portal
@@ -228,6 +250,13 @@ is kept for the tab (bounded by `MAX_TOLD`): X redraws its card from memory
 whenever it rebuilds the timeline, such as after opening a post and going
 back, and the handle lookup claims it again each time. Hidden-state CSS is
 therefore keyed on `[data-aitf-hidden]` rather than on `article`.
+
+**X's card comes back after every rebuild.** A wire report leaves the post in
+place, but X's server remembers it: backing out of a thread or reloading redraws
+the "Thanks" card in that spot, with no post id in it. The controller adopts
+those cards from the wire's entry order: a run of cards between two identified
+neighbours maps onto the ids the timeline response placed between them. A card it
+cannot tie to a post is dressed generically and dropped when it leaves the DOM.
 
 ## Rule precedence
 

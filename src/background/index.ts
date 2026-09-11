@@ -111,8 +111,9 @@ chrome.runtime.onMessage.addListener((raw: unknown, sender, respond) => {
       return yield* new OperationError({ message: 'Untrusted sender.' });
     const message = yield* Schema.decodeUnknown(Request)(raw);
     const fromPopup = !sender.tab && sender.url === chrome.runtime.getURL('popup.html');
-    const fromTimeline = sender.tab && /^https:\/\/(?:x|twitter)\.com\//.test(sender.url ?? '');
-    if (!fromPopup && !(fromTimeline && contentRequests.has(message.type))) {
+    const fromSite =
+      sender.tab && /^https:\/\/(?:x\.com|twitter\.com|www\.youtube\.com)\//.test(sender.url ?? '');
+    if (!fromPopup && !(fromSite && contentRequests.has(message.type))) {
       return yield* new OperationError({
         message: 'This operation is not available to content scripts.',
       });

@@ -7,6 +7,7 @@
   "host_permissions": [
     "https://x.com/*",
     "https://twitter.com/*",
+    "https://www.youtube.com/*",
     "https://openrouter.ai/*",
     "https://api.openai.com/*",
     "https://api.anthropic.com/*"
@@ -25,6 +26,12 @@
     },
     {
       "matches": ["https://x.com/*", "https://twitter.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://www.youtube.com/*"],
       "js": ["content.js"],
       "css": ["content.css"],
       "run_at": "document_start"
@@ -47,11 +54,15 @@
   },
   "commands": {
     "toggle-filtering": {
-      "suggested_key": { "default": "Alt+Shift+F" },
+      "suggested_key": {
+        "default": "Alt+Shift+F"
+      },
       "description": "Turn filtering on or off"
     },
     "toggle-thread": {
-      "suggested_key": { "default": "Alt+Shift+T" },
+      "suggested_key": {
+        "default": "Alt+Shift+T"
+      },
       "description": "Stop filtering the thread you are viewing"
     }
   }

@@ -6,8 +6,9 @@ import { Settings, type SettingsPatch } from '../common/settings';
 import { GeneralPanel, type GeneralTab } from './GeneralPanel';
 import { ListSheet, type ListKey } from './ListSheet';
 import { ModelBrowser } from './ModelBrowser';
-import { Rail, type Section } from './Rail';
+import { Rail, type Section, type Site } from './Rail';
 import { XPanel, type XTab } from './XPanel';
+import { YouTubePanel } from './YouTubePanel';
 import { Notice } from './ui';
 
 type Form = { draft: Settings; saved: Settings };
@@ -41,7 +42,7 @@ export function App() {
   const [status, setStatus] = useState('');
   const [message, setMessage] = useState<{ text: string; tone: 'bad' | 'good' }>();
   const [thread, setThread] = useState('');
-  const [onSite, setOnSite] = useState(false);
+  const [site, setSite] = useState<Site | null>(null);
   const [busy, setBusy] = useState(false);
 
   /** Keep an open popup honest about edits made from the timeline, without
@@ -81,9 +82,14 @@ export function App() {
       }),
     );
     void chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
-      if (!tab?.url || !/^https:\/\/(?:x|twitter)\.com\//.test(tab.url)) return;
-      setOnSite(true);
-      setThread(threadId(new URL(tab.url).pathname));
+      if (!tab?.url) return;
+      if (/^https:\/\/(?:x|twitter)\.com\//.test(tab.url)) {
+        setSite('x');
+        setThread(threadId(new URL(tab.url).pathname));
+      } else if (/^https:\/\/www\.youtube\.com\//.test(tab.url)) {
+        setSite('youtube');
+        setSection('youtube');
+      }
     });
     const onChange = (_changes: Record<string, chrome.storage.StorageChange>, area: string) => {
       if (area === 'local') void refresh().catch(() => {});
@@ -112,7 +118,7 @@ export function App() {
     // A failed load must say so; a silent spinner is indistinguishable from a hang.
     return (
       <div class="shell">
-        <Rail section={section} onSite={onSite} onSelect={setSection} />
+        <Rail section={section} site={site} onSelect={setSection} />
         <div class="main">
           <div class="body">
             {message?.tone === 'bad' ? (
@@ -147,6 +153,7 @@ export function App() {
 
   const { draft, saved } = form;
   const dirty = !same(draft, saved);
+  const live = site && (site === 'x' ? saved.enabled : saved.youtubeEnabled) ? site : null;
   const update = <K extends keyof Settings>(key: K, value: Settings[K]) =>
     setForm((form) => form && { ...form, draft: { ...form.draft, [key]: value } });
   const editor = { settings: draft, update };
@@ -170,8 +177,18 @@ export function App() {
         Object.entries(next).filter(([key, value]) => !same(value, saved[key as keyof Settings])),
       );
       const result = await request({ type: 'PATCH_SETTINGS', patch });
+      // A worker from an older build drops fields it does not know, and the
+      // reply is filled from defaults. Say so, rather than showing a save that
+      // quietly did nothing. Lists and records may be normalised by the worker,
+      // so only plain values are compared.
+      const dropped = (Object.keys(patch) as (keyof Settings)[]).filter(
+        (key) => typeof patch[key] !== 'object' && result[key] !== patch[key],
+      );
+      if (dropped.length) {
+        throw new Error('Sharp was updated. Reload it on chrome://extensions, then save again.');
+      }
       setForm({ draft: result, saved: result });
-      setMessage({ text: 'Saved. Open X tabs picked it up.', tone: 'good' });
+      setMessage({ text: 'Saved.', tone: 'good' });
     } catch (error) {
       setMessage({
         text: error instanceof Error ? error.message : 'Could not save settings.',
@@ -208,7 +225,7 @@ export function App() {
         void save();
       }}
     >
-      <Rail section={section} onSite={onSite} onSelect={setSection} />
+      <Rail section={section} site={live} onSelect={setSection} />
 
       <div class="main">
         <nav class="tabs" role="tablist">
@@ -218,21 +235,26 @@ export function App() {
                 ['rules', 'Rules'],
                 ['activity', 'Activity'],
               ] as const)
-            : ([
-                ['connection', 'Connection'],
-                ['appearance', 'Appearance'],
-                ['about', 'About'],
-              ] as const)
+            : section === 'youtube'
+              ? ([['filtering', 'Filtering']] as const)
+              : ([
+                  ['connection', 'Connection'],
+                  ['appearance', 'Appearance'],
+                  ['about', 'About'],
+                ] as const)
           ).map(([id, label]) => (
             <button
               key={id}
               type="button"
               class="tab"
               role="tab"
-              aria-selected={(section === 'x' ? xTab : generalTab) === id}
-              onClick={() =>
-                section === 'x' ? setXTab(id as XTab) : setGeneralTab(id as GeneralTab)
+              aria-selected={
+                section === 'x' ? xTab === id : section === 'youtube' || generalTab === id
               }
+              onClick={() => {
+                if (section === 'x') setXTab(id as XTab);
+                else if (section === 'general') setGeneralTab(id as GeneralTab);
+              }}
             >
               {label}
               {id === 'activity' && status ? <span class="count">!</span> : null}
@@ -298,6 +320,8 @@ export function App() {
                 })
               }
             />
+          ) : section === 'youtube' ? (
+            <YouTubePanel {...editor} />
           ) : (
             <GeneralPanel
               {...editor}
