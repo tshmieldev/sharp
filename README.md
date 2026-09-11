@@ -9,6 +9,10 @@
 Filter your X timeline with an AI model you choose and pay for directly.
 Describe what you want to see — or never see again — in plain language.
 
+<a href="https://chromewebstore.google.com/detail/sharp/colokgnfkjacfaahjbionncilmjioedo">
+  <img height="36" src="https://img.shields.io/badge/Chrome_Web_Store-Install-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Install from the Chrome Web Store">
+</a>
+&nbsp;
 <a href="https://ko-fi.com/tshmieldev">
   <img height="36" src="https://storage.ko-fi.com/cdn/kofi3.png?v=6" alt="Buy me a coffee at ko-fi.com">
 </a>
@@ -55,6 +59,8 @@ You pay your provider directly. Nothing is collected, measured, or sent anywhere
 else.
 
 ## Install
+
+From the [Chrome Web Store](https://chromewebstore.google.com/detail/sharp/colokgnfkjacfaahjbionncilmjioedo), or from source:
 
 Sharp isn't in the Chrome Web Store yet. Grab the zip from
 [Releases](https://github.com/tshmieldev/sharp/releases) and unzip it, or build
