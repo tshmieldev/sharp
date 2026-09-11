@@ -152,7 +152,7 @@ html[data-aitf-yt-grey-ui] ytd-thumbnail #overlays {
   filter: grayscale(1) !important;
 }
 html[data-aitf-yt-grey-content] .ytThumbnailViewModelImage,
-html[data-aitf-yt-grey-content] .ytCoreImageHost,
+html[data-aitf-yt-grey-content] .ytThumbnailViewModelImage .ytCoreImageHost,
 html[data-aitf-yt-grey-content] .shortsLockupViewModelHostThumbnailParentContainer,
 html[data-aitf-yt-grey-content] ytd-thumbnail yt-image,
 html[data-aitf-yt-grey-content] ytd-thumbnail img,
