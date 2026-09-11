@@ -151,9 +151,13 @@ html[data-aitf-yt-grey-ui] yt-thumbnail-overlay-badge-view-model,
 html[data-aitf-yt-grey-ui] ytd-thumbnail #overlays {
   filter: grayscale(1) !important;
 }
-html[data-aitf-yt-grey-content] yt-thumbnail-view-model,
-html[data-aitf-yt-grey-content] ytd-thumbnail,
-html[data-aitf-yt-grey-content] ytd-playlist-thumbnail,
+html[data-aitf-yt-grey-content] .ytThumbnailViewModelImage,
+html[data-aitf-yt-grey-content] .ytCoreImageHost,
+html[data-aitf-yt-grey-content] .shortsLockupViewModelHostThumbnailParentContainer,
+html[data-aitf-yt-grey-content] ytd-thumbnail yt-image,
+html[data-aitf-yt-grey-content] ytd-thumbnail img,
+html[data-aitf-yt-grey-content] ytd-playlist-thumbnail img,
+html[data-aitf-yt-grey-content] yt-image img,
 html[data-aitf-yt-grey-content] ytd-player,
 html[data-aitf-yt-grey-content] #movie_player,
 html[data-aitf-yt-grey-content] ytd-reel-video-renderer #player-container,
