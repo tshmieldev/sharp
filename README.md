@@ -14,9 +14,7 @@ Describe what you want to see — or never see again — in plain language.
 <a href="https://github.com/sponsors/tshmieldev"><img height="36" src="https://img.shields.io/badge/GitHub_Sponsors-%E2%9D%A4-ea4aaa?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor on GitHub"></a>
 <br>
 <a href="https://ko-fi.com/tshmieldev"><img height="36" src="https://storage.ko-fi.com/cdn/kofi3.png?v=6" alt="Buy me a coffee at ko-fi.com"></a>
-
 <br><br>
-
 <img src="store/promo.gif" width="600" alt="Typing a filter into Sharp, then posts collapsing on the X timeline">
 
 <sub><a href="store/promo-0.2.0-square.mp4">Square</a> · <a href="store/promo-0.2.0.mp4">Widescreen</a> full quality</sub>
