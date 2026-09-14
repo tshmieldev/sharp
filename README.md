@@ -61,9 +61,10 @@ else.
 **Chrome and other Chromium browsers:** from the
 [Chrome Web Store](https://chromewebstore.google.com/detail/sharp/colokgnfkjacfaahjbionncilmjioedo).
 
-**Firefox:** not on AMO yet. Grab the Firefox zip from
-[Releases](https://github.com/tshmieldev/sharp/releases), or build it from
-source below.
+**Firefox:** submitted to [addons.mozilla.org](https://addons.mozilla.org/) and
+awaiting review. Until it is signed, grab `sharp-<version>-firefox.zip` from
+[Releases](https://github.com/tshmieldev/sharp/releases) or build it from source
+below, and load it as a temporary add-on. Firefox 140 or newer.
 
 From source, with [Bun](https://bun.sh):
 
@@ -78,10 +79,11 @@ In Chrome, open `chrome://extensions`, turn on **Developer mode**, click **Load
 unpacked**, and pick the repository folder.
 
 In Firefox, open `about:debugging` → **This Firefox** → **Load Temporary
-Add-on**, and pick `firefox/manifest.json`. Firefox 133 or newer. Firefox hands
-out site access one origin at a time, so open Sharp and use **Grant access** if
-it says it cannot reach x.com, youtube.com or your provider; reload any tabs
-that were already open.
+Add-on**, and pick `firefox/manifest.json`. A temporary add-on is gone after a
+restart, which is why the AMO listing matters. Firefox hands out site access one
+origin at a time, so open Sharp and use **Grant access** if it says it has none
+for x.com, youtube.com or your provider; reload any tabs that were already
+open.
 
 ## Set it up
 
