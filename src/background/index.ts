@@ -1,4 +1,5 @@
 import { Effect, Schema } from 'effect';
+import { isFirefox } from '../common/build';
 import { errorMessage, OperationError } from '../common/errors';
 import { Request } from '../common/messages';
 import { threadId } from '../common/post';
@@ -120,16 +121,19 @@ chrome.runtime.onMessage.addListener((raw: unknown, sender, respond) => {
     }
     return yield* handle(message);
   });
-  Effect.runPromise(
+  const settled = Effect.runPromise(
     program.pipe(
       Effect.match({
         onSuccess: (result) => ({ ok: true, result }),
         onFailure: (error) => ({ ok: false, error: errorMessage(error) }),
       }),
     ),
-  ).then(respond, () =>
-    respond({ ok: false, error: 'Unexpected extension error. Reload the extension.' }),
-  );
+  ).catch(() => ({ ok: false, error: 'Unexpected extension error. Reload the extension.' }));
+  // Firefox answers with whatever promise the listener returns. Chrome ignores
+  // a returned promise and answers only through `respond`, and only if the
+  // listener claims the channel by returning `true` synchronously.
+  if (isFirefox) return settled;
+  void settled.then(respond);
   return true;
 });
 

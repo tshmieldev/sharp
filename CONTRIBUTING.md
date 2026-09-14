@@ -3,7 +3,7 @@
 Technical notes for working on Sharp. For what it does and how to install it,
 see the [README](README.md).
 
-**TypeScript · Effect · Preact · esbuild · Chrome Manifest V3**
+**TypeScript · Effect · Preact · esbuild · Manifest V3 (Chrome and Firefox)**
 
 ## Toolchain
 
@@ -12,12 +12,14 @@ Use [Bun](https://bun.sh/) 1.3.10 or newer (CI uses 1.3.10).
 ```sh
 bun install --frozen-lockfile
 bun run dev          # rebuild scripts and styles as you edit
+bun run dev:firefox  # the same, into firefox/
 bun run build:debug  # one unminified build with inline source maps
+bun run build:firefox # one production build into firefox/
 bun run typecheck    # strict TypeScript, without emitting
 bun run test         # focused provider, storage, cache, RPC and menu checks
 bun run format       # format source and docs
-bun run check        # types + tests + formatting + production build
-bun run release     # build, then zip it for a GitHub release
+bun run check        # types + tests + formatting + both production builds
+bun run release      # build both targets, then zip each for a release
 bun scripts/icon.mjs # regenerate icons/ from geometry
 ```
 
@@ -33,10 +35,16 @@ executing a malicious dependency later during builds or tests.
 
 ## Build output
 
-The build writes the bundled scripts, styles, and popup HTML **beside
+The Chrome build writes the bundled scripts, styles, and popup HTML **beside
 `manifest.json` in the repository root**, not into a subdirectory. This keeps
 the original unpacked-extension path and ID. No runtime code is loaded from a
 CDN.
+
+`--target=firefox` writes a complete second build into `firefox/`, generated
+manifest included. It is compiled, not copied: the target is a build-time
+constant, so each bundle carries only its own browser's branch. Load
+`firefox/manifest.json` from **about:debugging → This Firefox → Load Temporary
+Add-on**. `firefox/` is generated and ignored by Git.
 
 `bun run build` minifies. When a stack trace points at `content.js:45`, use
 `bun run build:debug` (or `bun run dev`): readable names, inline source maps, so
@@ -59,6 +67,75 @@ The popup's **Build** timestamp identifies its compiled code; on X,
 `document.documentElement.dataset.aitfBuild` should return the same timestamp.
 Missing or different values identify a missing or stale content script.
 
+## Firefox
+
+One source tree, two Manifest V3 browsers. Everything that differs is listed
+here; there is no polyfill, because the extension only ever calls promise-based
+`chrome.*` APIs and Firefox provides those under the same name.
+
+`scripts/manifest.mjs` derives Firefox's manifest from Chrome's:
+
+- **Background.** Firefox has no extension service worker, so
+  `background.service_worker` becomes `background.scripts` on an event page. The
+  bundle is unchanged: nothing in `src/background/` touches a worker-only
+  global, and an event page is suspended and revived the same way, which the
+  code already assumes.
+- **`browser_specific_settings.gecko.id`.** AMO keys the add-on on it, and
+  `storage.sync` — read once, to migrate API keys off it — has nowhere to write
+  without it. It must never change between releases.
+- **`strict_min_version`.** What the code needs is 133: 128 brought MAIN-world
+  content scripts, module event pages and `optional_host_permissions`, and 133
+  brought `storage.local.getBytesInUse`, which the popup uses to size the
+  verdict cache. The floor is 140 anyway, because that is where
+  `data_collection_permissions` starts being honoured, and 140 is the current
+  ESR, so nothing still supported is excluded.
+- **`data_collection_permissions`.** AMO refuses a new add-on without it. Sharp
+  declares `websiteContent` as required: nothing reaches the developer, there
+  being no server, but post text, handles and reply context do go to the AI
+  provider the reader configured, and that is the extension's whole function
+  rather than something optional. Keep it consistent with
+  [privacy-policy.md](privacy-policy.md).
+
+Two things differ at runtime, both behind `isFirefox` in `src/common/build.ts`,
+which is a build-time constant so the other browser's branch is dropped from
+the bundle:
+
+- **Answering a message.** Chrome answers only through `sendResponse`, and only
+  if the listener returns `true` synchronously to claim the channel. Firefox
+  answers with the promise the listener returns and ignores a claimed channel.
+  `src/background/index.ts` settles one promise and hands it over whichever way
+  the browser expects.
+- **Naming the extensions page** in the "Sharp was updated, reload it" error.
+
+Host permissions are the one real behavioural difference, and it is not
+papered over. Chrome grants declared `host_permissions` at install. Firefox
+treats them as optional even when declared, so until the reader grants them the
+content scripts never inject and the provider is unreachable — indistinguishable
+from a broken extension. The popup checks `permissions.contains` for the
+filtered sites and the configured provider's origin and, if any are missing,
+says so and offers a button that asks for exactly those. The request has to be
+the first thing the click does: Firefox rejects one made after an `await`,
+outside the user gesture. Granting does not inject into tabs that are already
+open, so the banner says to reload them.
+
+`bun run release` produces `sharp-<version>-chrome.zip` and
+`sharp-<version>-firefox.zip`. 0.3.0 is the exception: its Chrome archive was
+published as `sharp-0.3.0.zip`, before there was a second target, and keeps that
+name and URL — link it as-is rather than as `sharp-0.3.0-chrome.zip`. Every
+release from 0.4.0 names both by target.
+
+The Firefox archive goes to AMO, which signs it. Check it first with Mozilla's
+own validator:
+
+```sh
+bun run build:firefox && bunx web-ext lint --source-dir=firefox --self-hosted
+```
+
+It should report no errors. Three warnings are expected and not worth chasing:
+`data_collection_permissions` postdates the Android floor, and Preact's
+`dangerouslySetInnerHTML` path assigns to `innerHTML` inside its own bundle —
+no source file in `src/` touches `innerHTML`.
+
 ## Code map
 
 ```text
@@ -72,7 +149,7 @@ src/
   youtube/      Toggle-driven page rules: three attributes on <html>, one stylesheet
   popup/        Rail, per-site and general sections, model browser, list sheets
 tests/          Focused provider/storage, cache, RPC and menu checks
-scripts/        Three-entry extension build, and the icon generator
+scripts/        Per-target extension build, manifest derivation, release, icons
 ```
 
 **Site entry points are inert until called.** `src/index.ts` dispatches HTTPS

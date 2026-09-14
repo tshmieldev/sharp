@@ -11,14 +11,16 @@
   "trustedDependencies": [],
   "scripts": {
     "build": "bun scripts/build.mjs",
+    "build:firefox": "bun scripts/build.mjs --target=firefox",
     "build:debug": "bun scripts/build.mjs --debug",
     "release": "bun scripts/release.mjs",
     "dev": "bun scripts/build.mjs --watch",
+    "dev:firefox": "bun scripts/build.mjs --watch --target=firefox",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "bun run typecheck && bun run test && bun run format:check && bun run build"
+    "check": "bun run typecheck && bun run test && bun run format:check && bun run build && bun run build:firefox"
   },
   "dependencies": {
     "effect": "^3.19.0",

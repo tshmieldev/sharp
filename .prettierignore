@@ -10,3 +10,4 @@ bun.lock
 /popup.css
 /popup.html
 .worktree-backup
+/firefox

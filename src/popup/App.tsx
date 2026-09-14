@@ -2,7 +2,8 @@ import { useEffect, useState } from 'preact/hooks';
 import { Schema } from 'effect';
 import { request, type Stats } from '../common/messages';
 import { threadId } from '../common/post';
-import { Settings, type SettingsPatch } from '../common/settings';
+import { providerOrigins, Settings, siteOrigins, type SettingsPatch } from '../common/settings';
+import { extensionsPage } from '../common/build';
 import { GeneralPanel, type GeneralTab } from './GeneralPanel';
 import { ListSheet, type ListKey } from './ListSheet';
 import { ModelBrowser } from './ModelBrowser';
@@ -14,6 +15,9 @@ import { Notice } from './ui';
 type Form = { draft: Settings; saved: Settings };
 type Overlay = { kind: 'model'; view: 'models' | 'providers' } | { kind: 'list'; list: ListKey };
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+const noop = () => {};
+/** `https://x.com/*` reads as x.com to the person being asked about it. */
+const host = (origin: string) => origin.replace(/^https:\/\//, '').replace(/\/\*$/, '');
 
 function normalize(settings: Settings): Settings {
   const lines = (values: readonly string[], author = false) => [
@@ -44,6 +48,7 @@ export function App() {
   const [thread, setThread] = useState('');
   const [site, setSite] = useState<Site | null>(null);
   const [busy, setBusy] = useState(false);
+  const [missing, setMissing] = useState<readonly string[]>([]);
 
   /** Keep an open popup honest about edits made from the timeline, without
    *  discarding fields the reader is still editing here. */
@@ -97,6 +102,36 @@ export function App() {
     chrome.storage.onChanged.addListener(onChange);
     return () => chrome.storage.onChanged.removeListener(onChange);
   }, []);
+
+  const provider = form?.saved.provider;
+  const customBaseUrl = form?.saved.customBaseUrl;
+  /** Chrome grants declared host permissions at install, so this finds nothing
+   *  and the banner never appears. Firefox hands them out one origin at a time,
+   *  and without them the content scripts never run and the provider is
+   *  unreachable, which otherwise looks exactly like a broken extension. */
+  useEffect(() => {
+    if (provider === undefined || customBaseUrl === undefined) return;
+    let live = true;
+    const wanted = [...siteOrigins, ...providerOrigins({ provider, customBaseUrl })];
+    void Promise.all(
+      wanted.map(async (origin) =>
+        (await chrome.permissions.contains({ origins: [origin] })) ? null : origin,
+      ),
+    ).then((results) => {
+      if (live) setMissing(results.filter((origin) => origin !== null));
+    }, noop);
+    return () => {
+      live = false;
+    };
+  }, [provider, customBaseUrl]);
+
+  /** Asking must be the first thing the click does: Firefox rejects a
+   *  permission request that is not still inside the user's gesture. */
+  function grant() {
+    void chrome.permissions.request({ origins: [...missing] }).then((granted) => {
+      if (granted) setMissing([]);
+    }, noop);
+  }
 
   async function run(action: () => Promise<string>) {
     setBusy(true);
@@ -185,7 +220,7 @@ export function App() {
         (key) => typeof patch[key] !== 'object' && result[key] !== patch[key],
       );
       if (dropped.length) {
-        throw new Error('Sharp was updated. Reload it on chrome://extensions, then save again.');
+        throw new Error(`Sharp was updated. Reload it on ${extensionsPage}, then save again.`);
       }
       setForm({ draft: result, saved: result });
       setMessage({ text: 'Saved.', tone: 'good' });
@@ -263,8 +298,21 @@ export function App() {
         </nav>
 
         <div class="body">
-          {(status || message?.tone === 'bad') && (
+          {(missing.length > 0 || status || message?.tone === 'bad') && (
             <div class="alerts">
+              {missing.length > 0 && (
+                <>
+                  <Notice tone="bad">
+                    {`Sharp has no access to ${missing.map(host).join(', ')} yet, so it cannot filter there.`}
+                  </Notice>
+                  <div class="actions">
+                    <button type="button" class="btn small" onClick={grant}>
+                      Grant access
+                    </button>
+                  </div>
+                  <p class="note tight">Reload any open tab afterwards.</p>
+                </>
+              )}
               {status && <Notice tone="bad">{status}</Notice>}
               {message?.tone === 'bad' && <Notice tone="bad">{message.text}</Notice>}
             </div>

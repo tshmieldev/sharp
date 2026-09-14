@@ -1,4 +1,4 @@
-import { request } from '../common/messages';
+import { orphaned, request } from '../common/messages';
 import type { Post, Verdict } from '../common/post';
 import { decisionScope, type PublicSettings } from '../common/settings';
 import { authorRule } from '../common/author-rules';
@@ -778,7 +778,7 @@ export class TimelineController {
       .then(
         (results) => this.settle(selected, results, generation),
         () => {
-          if (!chrome.runtime.id) this.stop();
+          if (orphaned()) this.stop();
           this.settle(selected, [], generation);
         },
       )

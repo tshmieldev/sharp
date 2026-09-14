@@ -1,53 +1,67 @@
 import { execFileSync } from 'node:child_process';
-import { access, cp, mkdir, rm, stat } from 'node:fs/promises';
-import { readFile } from 'node:fs/promises';
+import { access, cp, mkdir, readFile, rm, stat } from 'node:fs/promises';
+import { assetsOf, manifestFor } from './manifest.mjs';
 
-// Builds, then stages exactly what Chrome loads into a zip with manifest.json at
-// the root, which is what both "Load unpacked" and the Web Store expect.
+// Builds, then stages exactly what a browser loads into a zip with
+// manifest.json at the root, which is what "Load unpacked", the Chrome Web
+// Store and AMO all expect. One zip per target.
 
 const STAGE = '.release';
-const manifest = JSON.parse(await readFile('manifest.json', 'utf8'));
-const output = `sharp-${manifest.version}.zip`;
-
-console.log('Building…');
-execFileSync('bun', ['scripts/build.mjs'], { stdio: 'inherit' });
-
-const files = [
-  'manifest.json',
-  manifest.background.service_worker,
-  manifest.action.default_popup,
-  ...new Set([...Object.values(manifest.icons), ...Object.values(manifest.action.default_icon)]),
-  ...manifest.content_scripts.flatMap((script) => [...script.js, ...(script.css ?? [])]),
-  'popup.js',
-  'popup.css',
-];
-const unique = [...new Set(files)];
-
-// A missing asset must fail here, not silently ship a broken zip.
-await Promise.all(
-  unique.map((file) =>
-    access(file).catch(() => {
-      throw new Error(`Missing ${file}. Run \`bun run build\` and try again.`);
-    }),
-  ),
-);
+const base = JSON.parse(await readFile('manifest.json', 'utf8'));
+const targets = ['chrome', 'firefox'];
+const built = [];
 
 await rm(STAGE, { recursive: true, force: true });
-await mkdir(STAGE, { recursive: true });
-for (const file of unique) {
-  await cp(file, `${STAGE}/${file}`, { recursive: true });
+
+for (const target of targets) {
+  console.log(`Building ${target}…`);
+  execFileSync('bun', ['scripts/build.mjs', `--target=${target}`], { stdio: 'inherit' });
+
+  // Chrome builds into the repository root so the checkout stays loadable
+  // unpacked; Firefox builds into a directory of its own.
+  const root = target === 'firefox' ? 'firefox' : '.';
+  const files = assetsOf(manifestFor(base, target));
+  const stage = `${STAGE}/${target}`;
+  const output = `sharp-${base.version}-${target}.zip`;
+
+  // A missing asset must fail here, not silently ship a broken zip.
+  await Promise.all(
+    files.map((file) =>
+      access(`${root}/${file}`).catch(() => {
+        throw new Error(`Missing ${root}/${file}. Run \`bun run build\` and try again.`);
+      }),
+    ),
+  );
+
+  await mkdir(stage, { recursive: true });
+  for (const file of files) {
+    await cp(`${root}/${file}`, `${stage}/${file}`, { recursive: true });
+  }
+
+  await rm(output, { force: true });
+  try {
+    execFileSync('zip', ['-r', '-q', '-X', `../../${output}`, '.'], {
+      cwd: stage,
+      stdio: 'inherit',
+    });
+  } catch (error) {
+    throw new Error(
+      `Could not run \`zip\`. Install it, or zip ${stage}/ by hand. ${error.message}`,
+    );
+  }
+  built.push({ output, files: files.length });
 }
 
-await rm(output, { force: true });
-try {
-  execFileSync('zip', ['-r', '-q', '-X', `../${output}`, '.'], { cwd: STAGE, stdio: 'inherit' });
-} catch (error) {
-  throw new Error(`Could not run \`zip\`. Install it, or zip ${STAGE}/ by hand. ${error.message}`);
-}
 await rm(STAGE, { recursive: true, force: true });
 
-const { size } = await stat(output);
-console.log(`\n${output}  ${Math.round(size / 1024)} KB  ${unique.length} files`);
+console.log('');
+for (const { output, files } of built) {
+  const { size } = await stat(output);
+  console.log(`${output}  ${Math.round(size / 1024)} KB  ${files} files`);
+}
 console.log(
-  `\nPublish it with:\n  gh release create v${manifest.version} ${output} --generate-notes`,
+  `\nPublish them with:\n  gh release create v${base.version} ${built
+    .map((entry) => entry.output)
+    .join(' ')} --generate-notes`,
 );
+console.log(`\nThe Firefox zip is what AMO takes at https://addons.mozilla.org/developers/.`);

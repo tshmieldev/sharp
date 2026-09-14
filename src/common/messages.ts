@@ -119,6 +119,18 @@ const Envelope = Schema.Union(
   Schema.Struct({ ok: Schema.Literal(false), error: Schema.String }),
 );
 
+/** Whether the extension this content script came from is gone — reloaded,
+ *  updated or removed — leaving the script running on a page it may no longer
+ *  touch. Chrome empties `runtime.id`; Firefox throws when it is read. Reading
+ *  it must not itself throw, because the callers are failure handlers. */
+export function orphaned() {
+  try {
+    return !chrome.runtime?.id;
+  } catch {
+    return true;
+  }
+}
+
 /** Chrome and Promise interop lives at this boundary; callers get validated data. */
 export function request<T extends Request>(message: T): Promise<Response<T['type']>> {
   return Effect.runPromise(

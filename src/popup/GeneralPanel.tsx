@@ -141,7 +141,7 @@ export function GeneralPanel({
         {settings.provider === 'custom' ? (
           <Field
             label="HTTPS base URL"
-            hint="Include /v1 if the endpoint requires it. Chrome asks for permission on save."
+            hint="Include /v1 if the endpoint requires it. Your browser asks for permission on save."
           >
             <input
               type="url"

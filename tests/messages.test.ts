@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { request, Request } from '../src/common/messages';
+import { orphaned, request, Request } from '../src/common/messages';
 import { Schema } from 'effect';
 import { defaults } from '../src/common/settings';
 import { mockChrome } from './chrome';
@@ -135,4 +135,21 @@ it('fills settings from an older worker with defaults instead of failing', async
   });
   chrome.runtime.sendMessage.mockResolvedValue({ ok: true, result: { ...stale, enabled: 'yes' } });
   await expect(request({ type: 'GET_SETTINGS' })).rejects.toThrow();
+});
+
+it('reports an orphaned content script however the browser signals it', () => {
+  mockChrome();
+  expect(orphaned()).toBe(false);
+  // Chrome empties runtime.id once the extension is reloaded or removed.
+  vi.stubGlobal('chrome', { runtime: {} });
+  expect(orphaned()).toBe(true);
+  vi.stubGlobal('chrome', {});
+  expect(orphaned()).toBe(true);
+  // Firefox throws instead, and this runs inside failure handlers.
+  vi.stubGlobal('chrome', {
+    get runtime(): never {
+      throw new Error('Extension context invalidated.');
+    },
+  });
+  expect(orphaned()).toBe(true);
 });
