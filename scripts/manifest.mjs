@@ -11,6 +11,9 @@ export const GECKO_ID = 'sharp@tshmieldev.github.io';
  *  current ESR, so nothing still supported is excluded. */
 export const GECKO_MIN_VERSION = '140.0';
 
+/** The manifest a target actually loads, given the Chrome one in the
+ *  repository. Chrome's is returned unchanged; Firefox's differs only in the
+ *  keys below. */
 export function manifestFor(base, target) {
   if (target !== 'firefox') return base;
   const { background, ...rest } = base;

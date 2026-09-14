@@ -119,8 +119,13 @@ outside the user gesture. Granting does not inject into tabs that are already
 open, so the banner says to reload them.
 
 `bun run release` produces `sharp-<version>-chrome.zip` and
-`sharp-<version>-firefox.zip`. The Firefox one goes to AMO, which signs it.
-Check it first with Mozilla's own validator:
+`sharp-<version>-firefox.zip`. 0.3.0 is the exception: its Chrome archive was
+published as `sharp-0.3.0.zip`, before there was a second target, and keeps that
+name and URL — link it as-is rather than as `sharp-0.3.0-chrome.zip`. Every
+release from 0.4.0 names both by target.
+
+The Firefox archive goes to AMO, which signs it. Check it first with Mozilla's
+own validator:
 
 ```sh
 bun run build:firefox && bunx web-ext lint --source-dir=firefox --self-hosted
