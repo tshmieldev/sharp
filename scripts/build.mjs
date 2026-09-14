@@ -1,19 +1,41 @@
 import { context } from 'esbuild';
-import { access, cp, readFile } from 'node:fs/promises';
+import { access, cp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { assetsOf, manifestFor } from './manifest.mjs';
 
-const watch = process.argv.includes('--watch');
-// Readable output with inline source maps, for reading stack traces in Chrome.
-// Watching implies it; a one-off `--debug` build gets the same without watching.
-const debug = watch || process.argv.includes('--debug');
-const manifest = JSON.parse(await readFile('manifest.json', 'utf8'));
-// Keep the repository root loadable, preserving the unpacked extension's ID
-// and local settings when replacing the original JavaScript implementation.
-await cp('src/popup/index.html', 'popup.html');
+const args = process.argv.slice(2);
+const watch = args.includes('--watch');
+// Readable output with inline source maps, for reading stack traces in the
+// browser. Watching implies it; a one-off `--debug` build gets the same
+// without watching.
+const debug = watch || args.includes('--debug');
+const flag = args.find((arg) => arg.startsWith('--target='));
+const target = flag ? flag.slice('--target='.length) : 'chrome';
+if (target !== 'chrome' && target !== 'firefox') {
+  throw new Error(`Unknown ${flag}. Use --target=chrome or --target=firefox.`);
+}
+const base = JSON.parse(await readFile('manifest.json', 'utf8'));
+const manifest = manifestFor(base, target);
+
+// Chrome's build stays at the repository root, preserving the unpacked
+// extension's ID and local settings across rebuilds. Firefox needs a different
+// manifest, so its build gets a directory of its own to point
+// about:debugging at — the JavaScript and CSS in it are freshly compiled, not
+// copies of Chrome's.
+const out = target === 'firefox' ? 'firefox/' : '';
+if (out) {
+  await mkdir(out, { recursive: true });
+  await cp('icons', `${out}icons`, { recursive: true });
+  await writeFile(`${out}manifest.json`, `${JSON.stringify(manifest, null, 2)}\n`);
+}
+await cp('src/popup/index.html', `${out}popup.html`);
 
 const options = {
   bundle: true,
-  define: { __BUILD_ID__: JSON.stringify(new Date().toISOString()) },
-  target: 'chrome120',
+  define: {
+    __BUILD_ID__: JSON.stringify(new Date().toISOString()),
+    __TARGET__: JSON.stringify(target),
+  },
+  target: target === 'firefox' ? 'firefox133' : 'chrome120',
   sourcemap: debug ? 'inline' : false,
   minify: !debug,
   legalComments: 'none',
@@ -23,14 +45,14 @@ const builds = await Promise.all([
   context({
     ...options,
     entryPoints: ['src/background/index.ts'],
-    outfile: 'background.js',
+    outfile: `${out}background.js`,
     format: 'esm',
   }),
-  // Chrome content scripts are classic scripts, not ES modules.
+  // Content scripts are classic scripts, not ES modules.
   context({
     ...options,
     entryPoints: ['src/index.ts'],
-    outfile: 'content.js',
+    outfile: `${out}content.js`,
     format: 'iife',
   }),
   // Runs in the page's own world (manifest `world: MAIN`): no chrome.*, and
@@ -38,33 +60,33 @@ const builds = await Promise.all([
   context({
     ...options,
     entryPoints: ['src/x/wire.ts'],
-    outfile: 'wire.js',
+    outfile: `${out}wire.js`,
     format: 'iife',
   }),
   context({
     ...options,
     entryPoints: ['src/popup/index.tsx'],
-    outfile: 'popup.js',
+    outfile: `${out}popup.js`,
     format: 'esm',
   }),
 ]);
 if (watch) {
   await Promise.all(builds.map((build) => build.watch()));
-  console.log('Watching source files. Reload the extension and X tabs after changes.');
+  console.log(
+    `Watching source files for ${target}. Reload the extension and X tabs after changes.`,
+  );
 } else {
   try {
     await Promise.all(builds.map((build) => build.rebuild()));
-    const assets = [
-      manifest.background.service_worker,
-      manifest.action.default_popup,
-      ...Object.values(manifest.icons),
-      ...manifest.content_scripts.flatMap((script) => [...script.js, ...(script.css ?? [])]),
-      'popup.js',
-      'popup.css',
-    ];
-    await Promise.all(assets.map((asset) => access(asset)));
+    // `manifest.json` is written above for Firefox and committed for Chrome,
+    // so only Chrome's root needs it checked from the repository.
+    await Promise.all(assetsOf(manifest).map((asset) => access(`${out}${asset}`)));
+    const where = out ? `${process.cwd()}/${out.replace(/\/$/, '')}` : process.cwd();
     console.log(
-      `Built ${debug ? 'a debug build' : 'the extension'} in ${process.cwd()}. Load this directory in Chrome.`,
+      `Built ${debug ? 'a debug build' : 'the extension'} for ${target} in ${where}.\n` +
+        (target === 'firefox'
+          ? 'Load firefox/manifest.json in about:debugging → This Firefox → Load Temporary Add-on.'
+          : 'Load this directory in Chrome.'),
     );
   } finally {
     await Promise.all(builds.map((build) => build.dispose()));

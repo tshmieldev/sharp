@@ -131,6 +131,32 @@ export const providers = {
   custom: { label: 'Custom (OpenAI-compatible)', baseUrl: '' },
 } satisfies Record<Provider, { label: string; baseUrl: string }>;
 
+/** The pages Sharp filters. Declared in the manifest, but Firefox treats
+ *  host permissions as optional even when they are declared, so the popup has
+ *  to be able to ask for them. */
+export const siteOrigins = [
+  'https://x.com/*',
+  'https://twitter.com/*',
+  'https://www.youtube.com/*',
+] as const;
+
+/** The origin the configured provider is reached at, if it has a usable one. A
+ *  half-typed custom URL has none, and is not worth an error here: saving
+ *  validates it properly. */
+export function providerOrigins(
+  settings: Pick<Settings, 'provider' | 'customBaseUrl'>,
+): readonly string[] {
+  const base =
+    settings.provider === 'custom' ? settings.customBaseUrl : providers[settings.provider].baseUrl;
+  if (!base) return [];
+  try {
+    const url = new URL(base);
+    return url.protocol === 'https:' ? [`${url.origin}/*`] : [];
+  } catch {
+    return [];
+  }
+}
+
 export function publicSettings(settings: Settings): PublicSettings {
   const { apiKeys, ...rest } = settings;
   return {

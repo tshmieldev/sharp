@@ -51,6 +51,8 @@ or [Anthropic](https://www.anthropic.com/legal/privacy).
 - **Storage** — to save your settings, key, and decision cache locally.
 - **Access to x.com and twitter.com** — to read posts on the page and hide the
   ones that match your criteria.
+- **Access to www.youtube.com** — to apply the YouTube page rules you turn on.
+  Nothing on YouTube is read or sent anywhere; the rules are stylesheet rules.
 - **Access to your provider's API** (`openrouter.ai`, `api.openai.com`,
   `api.anthropic.com`, or a custom endpoint you enter) — to send classification
   requests. A custom endpoint asks for its own permission when you save it.

@@ -58,19 +58,30 @@ else.
 
 ## Install
 
-From the [Chrome Web Store](https://chromewebstore.google.com/detail/sharp/colokgnfkjacfaahjbionncilmjioedo), or from source:
+**Chrome and other Chromium browsers:** from the
+[Chrome Web Store](https://chromewebstore.google.com/detail/sharp/colokgnfkjacfaahjbionncilmjioedo).
 
-Sharp isn't in the Chrome Web Store yet. Grab the zip from
-[Releases](https://github.com/tshmieldev/sharp/releases) and unzip it, or build
-it yourself with [Bun](https://bun.sh):
+**Firefox:** not on AMO yet. Grab the Firefox zip from
+[Releases](https://github.com/tshmieldev/sharp/releases), or build it from
+source below.
+
+From source, with [Bun](https://bun.sh):
 
 ```sh
 git clone https://github.com/tshmieldev/sharp
-cd sharp && bun install && bun run build
+cd sharp && bun install
+bun run build           # Chrome, into the repository root
+bun run build:firefox   # Firefox, into firefox/
 ```
 
-Then open `chrome://extensions`, turn on **Developer mode**, click **Load
-unpacked**, and pick the folder.
+In Chrome, open `chrome://extensions`, turn on **Developer mode**, click **Load
+unpacked**, and pick the repository folder.
+
+In Firefox, open `about:debugging` → **This Firefox** → **Load Temporary
+Add-on**, and pick `firefox/manifest.json`. Firefox 133 or newer. Firefox hands
+out site access one origin at a time, so open Sharp and use **Grant access** if
+it says it cannot reach x.com, youtube.com or your provider; reload any tabs
+that were already open.
 
 ## Set it up
 
