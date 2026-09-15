@@ -54,7 +54,9 @@ const notation = (shortcut: string) =>
 function useShortcuts() {
   const [commands, setCommands] = useState<chrome.commands.Command[]>([]);
   useEffect(() => {
-    void chrome.commands.getAll().then(setCommands, () => {});
+    // Absent where there are no keyboard shortcuts to bind, as on Android.
+    // Reading through it unguarded throws before the rejection handler exists.
+    void chrome.commands?.getAll().then(setCommands, () => {});
   }, []);
   return commands.filter((command) => command.description);
 }

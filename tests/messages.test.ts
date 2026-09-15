@@ -124,6 +124,34 @@ it('denies privileged content-script requests but allows the popup', async () =>
       url: 'chrome-extension://extension-id/popup.html',
     }),
   ).toMatchObject({ ok: true, result: { apiKeys: {} } });
+  // Kiwi on Android has nowhere to float a popup, so it opens the popup in a
+  // tab. The tab is not what makes a caller a content script; the origin is.
+  expect(
+    await send('GET_SETTINGS', {
+      id: 'extension-id',
+      url: 'chrome-extension://extension-id/popup.html',
+      tab: content.tab,
+    }),
+  ).toMatchObject({ ok: true, result: { apiKeys: {} } });
+  // The same page reached with a query string is still the same page.
+  expect(
+    await send('GET_SETTINGS', {
+      id: 'extension-id',
+      url: 'chrome-extension://extension-id/popup.html?reopened=1',
+      tab: content.tab,
+    }),
+  ).toMatchObject({ ok: true, result: { apiKeys: {} } });
+  // Another extension's page shares the scheme but not the origin.
+  expect(
+    await send('GET_SETTINGS', {
+      id: 'extension-id',
+      url: 'chrome-extension://other-extension/popup.html',
+    }),
+  ).toMatchObject({ ok: false });
+  // A filtered page is still held to the content-script request set, tab or no.
+  expect(
+    await send('GET_SETTINGS', { id: 'extension-id', url: 'https://x.com/home' }),
+  ).toMatchObject({ ok: false });
 });
 
 it('fills settings from an older worker with defaults instead of failing', async () => {
@@ -152,4 +180,38 @@ it('reports an orphaned content script however the browser signals it', () => {
     },
   });
   expect(orphaned()).toBe(true);
+});
+
+it('loads the worker on a browser with no keyboard shortcuts', async () => {
+  vi.resetModules();
+  const { chrome } = mockChrome({ settings: defaults });
+  let listener!: (
+    message: unknown,
+    sender: chrome.runtime.MessageSender,
+    respond: (response: unknown) => void,
+  ) => boolean;
+  // Android has no shortcuts to bind, so chrome.commands need not exist. The
+  // worker registers its message listener before touching it, but a throw at
+  // module scope still leaves the rest of the file unevaluated.
+  vi.stubGlobal('chrome', {
+    ...chrome,
+    runtime: {
+      ...chrome.runtime,
+      getURL: (path: string) => `chrome-extension://extension-id/${path}`,
+      onMessage: {
+        addListener: (handler: typeof listener) => {
+          listener = handler;
+        },
+      },
+    },
+  });
+  await expect(import('../src/background/index')).resolves.toBeDefined();
+  const reply = await new Promise((resolve) =>
+    listener(
+      { type: 'GET_SETTINGS' },
+      { id: 'extension-id', url: 'chrome-extension://extension-id/popup.html' },
+      resolve,
+    ),
+  );
+  expect(reply).toMatchObject({ ok: true });
 });

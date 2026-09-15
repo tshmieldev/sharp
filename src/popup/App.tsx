@@ -18,6 +18,31 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 const noop = () => {};
 /** `https://x.com/*` reads as x.com to the person being asked about it. */
 const host = (origin: string) => origin.replace(/^https:\/\//, '').replace(/\/\*$/, '');
+const filtered = /^https:\/\/(?:x\.com|twitter\.com|www\.youtube\.com)\//;
+
+/** The page the reader was looking at when they opened Sharp. Desktop Chrome
+ *  floats the popup above the page, so that is simply the active tab —
+ *  whatever it is. An active tab on an unrelated site is the honest answer
+ *  that the reader is not on a site Sharp filters, and is returned as such:
+ *  preferring a background X tab over it would put the X panel, and the thread
+ *  toggle with it, in front of someone looking at something else entirely.
+ *  The search below is not a better guess, it is the only guess available when
+ *  there is no page to read: where the popup has nowhere to float it opens in
+ *  a tab of its own — Kiwi on Android — and the active tab is the popup. */
+export async function readerTab() {
+  // A prefix, not `URL.origin`, which is "null" for every `chrome-extension:`
+  // URL under the standard parser and so matches nothing usefully.
+  const own = chrome.runtime.getURL('');
+  const active = await chrome.tabs.query({ active: true, currentWindow: true });
+  const page = active.find((tab) => tab.url && !tab.url.startsWith(own));
+  if (page?.url) return page.url;
+  // Only reached when the popup itself was the active tab. Restricted to
+  // filtered sites, so the guess is between pages the popup has a section for.
+  const all = await chrome.tabs.query({});
+  return all
+    .filter((tab) => tab.url && filtered.test(tab.url))
+    .sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))[0]?.url;
+}
 
 function normalize(settings: Settings): Settings {
   const lines = (values: readonly string[], author = false) => [
@@ -86,16 +111,16 @@ export function App() {
         tone: 'bad',
       }),
     );
-    void chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
-      if (!tab?.url) return;
-      if (/^https:\/\/(?:x|twitter)\.com\//.test(tab.url)) {
+    void readerTab().then((url) => {
+      if (!url) return;
+      if (/^https:\/\/(?:x|twitter)\.com\//.test(url)) {
         setSite('x');
-        setThread(threadId(new URL(tab.url).pathname));
-      } else if (/^https:\/\/www\.youtube\.com\//.test(tab.url)) {
+        setThread(threadId(new URL(url).pathname));
+      } else if (/^https:\/\/www\.youtube\.com\//.test(url)) {
         setSite('youtube');
         setSection('youtube');
       }
-    });
+    }, noop);
     const onChange = (_changes: Record<string, chrome.storage.StorageChange>, area: string) => {
       if (area === 'local') void refresh().catch(() => {});
     };
