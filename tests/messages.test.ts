@@ -181,3 +181,37 @@ it('reports an orphaned content script however the browser signals it', () => {
   });
   expect(orphaned()).toBe(true);
 });
+
+it('loads the worker on a browser with no keyboard shortcuts', async () => {
+  vi.resetModules();
+  const { chrome } = mockChrome({ settings: defaults });
+  let listener!: (
+    message: unknown,
+    sender: chrome.runtime.MessageSender,
+    respond: (response: unknown) => void,
+  ) => boolean;
+  // Android has no shortcuts to bind, so chrome.commands need not exist. The
+  // worker registers its message listener before touching it, but a throw at
+  // module scope still leaves the rest of the file unevaluated.
+  vi.stubGlobal('chrome', {
+    ...chrome,
+    runtime: {
+      ...chrome.runtime,
+      getURL: (path: string) => `chrome-extension://extension-id/${path}`,
+      onMessage: {
+        addListener: (handler: typeof listener) => {
+          listener = handler;
+        },
+      },
+    },
+  });
+  await expect(import('../src/background/index')).resolves.toBeDefined();
+  const reply = await new Promise((resolve) =>
+    listener(
+      { type: 'GET_SETTINGS' },
+      { id: 'extension-id', url: 'chrome-extension://extension-id/popup.html' },
+      resolve,
+    ),
+  );
+  expect(reply).toMatchObject({ ok: true });
+});

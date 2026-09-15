@@ -155,7 +155,9 @@ chrome.runtime.onMessage.addListener((raw: unknown, sender, respond) => {
   return true;
 });
 
-chrome.commands.onCommand.addListener((command) => {
+// Optional for the same reason the popup's shortcut list is: a browser with no
+// keyboard shortcuts need not offer the API, and this runs at module scope.
+chrome.commands?.onCommand.addListener((command) => {
   const operation = Effect.gen(function* () {
     if (command === 'toggle-filtering') {
       const settings = yield* getSettings;
