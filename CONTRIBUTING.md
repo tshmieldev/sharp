@@ -122,7 +122,7 @@ open, so the banner says to reload them.
 `sharp-<version>-firefox.zip`. 0.3.0 is the exception: its Chrome archive was
 published as `sharp-0.3.0.zip`, before there was a second target, and keeps that
 name and URL — link it as-is rather than as `sharp-0.3.0-chrome.zip`. Every
-release from 0.4.0 names both by target.
+release from 0.3.1 names both by target.
 
 The Firefox archive goes to AMO, which signs it. Check it first with Mozilla's
 own validator:
