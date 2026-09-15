@@ -10,6 +10,7 @@ export function startSite(site: Pick<Location, 'protocol' | 'hostname'> = locati
     case 'twitter.com':
       return startX();
     case 'www.youtube.com':
+    case 'm.youtube.com':
       return startYouTube();
   }
 }

@@ -140,6 +140,7 @@ export const siteOrigins = [
   'https://x.com/*',
   'https://twitter.com/*',
   'https://www.youtube.com/*',
+  'https://m.youtube.com/*',
 ] as const;
 
 /** The origin the configured provider is reached at, if it has a usable one. A

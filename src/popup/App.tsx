@@ -18,7 +18,7 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 const noop = () => {};
 /** `https://x.com/*` reads as x.com to the person being asked about it. */
 const host = (origin: string) => origin.replace(/^https:\/\//, '').replace(/\/\*$/, '');
-const filtered = /^https:\/\/(?:x\.com|twitter\.com|www\.youtube\.com)\//;
+const filtered = /^https:\/\/(?:x\.com|twitter\.com|(?:www|m)\.youtube\.com)\//;
 
 /** The page the reader was looking at when they opened Sharp. Desktop Chrome
  *  floats the popup above the page, so that is simply the active tab —
@@ -117,7 +117,7 @@ export function App() {
       if (/^https:\/\/(?:x|twitter)\.com\//.test(url)) {
         setSite('x');
         setThread(threadId(new URL(url).pathname));
-      } else if (/^https:\/\/www\.youtube\.com\//.test(url)) {
+      } else if (/^https:\/\/(?:www|m)\.youtube\.com\//.test(url)) {
         setSite('youtube');
         setSection('youtube');
       }

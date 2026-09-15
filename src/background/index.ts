@@ -131,7 +131,8 @@ chrome.runtime.onMessage.addListener((raw: unknown, sender, respond) => {
     const message = yield* Schema.decodeUnknown(Request)(raw);
     const privileged = fromExtensionPage(sender);
     const fromSite =
-      sender.tab && /^https:\/\/(?:x\.com|twitter\.com|www\.youtube\.com)\//.test(sender.url ?? '');
+      sender.tab &&
+      /^https:\/\/(?:x\.com|twitter\.com|(?:www|m)\.youtube\.com)\//.test(sender.url ?? '');
     if (!privileged && !(fromSite && contentRequests.has(message.type))) {
       return yield* new OperationError({
         message: 'This operation is not available to content scripts.',

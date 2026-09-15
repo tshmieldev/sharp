@@ -64,11 +64,26 @@ it('reads settings on start, follows storage changes and cleans up on dispose', 
   expect('aitfYtShorts' in document.documentElement.dataset).toBe(false);
 });
 
-it('starts the YouTube adapter for www.youtube.com only', () => {
+it('starts the YouTube adapter for both YouTube hostnames, over HTTPS only', () => {
   mockChrome();
-  expect(startSite({ protocol: 'https:', hostname: 'm.youtube.com' })).toBeUndefined();
+  for (const hostname of ['www.youtube.com', 'm.youtube.com']) {
+    const dispose = startSite({ protocol: 'https:', hostname });
+    expect(typeof dispose).toBe('function');
+    dispose?.();
+  }
   expect(startSite({ protocol: 'http:', hostname: 'www.youtube.com' })).toBeUndefined();
-  const dispose = startSite({ protocol: 'https:', hostname: 'www.youtube.com' });
-  expect(typeof dispose).toBe('function');
-  dispose?.();
+  expect(startSite({ protocol: 'http:', hostname: 'm.youtube.com' })).toBeUndefined();
+});
+
+it('matches YouTube hostnames exactly, so a lookalike starts nothing', () => {
+  mockChrome();
+  for (const hostname of [
+    'youtube.com',
+    'music.youtube.com',
+    'studio.youtube.com',
+    'm.youtube.com.evil.test',
+    'notm.youtube.com',
+  ]) {
+    expect(startSite({ protocol: 'https:', hostname })).toBeUndefined();
+  }
 });

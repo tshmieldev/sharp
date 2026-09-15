@@ -1,5 +1,10 @@
 /* YouTube rules are plain CSS keyed on attributes the content script sets on
-   <html>. Nothing here runs a model; each attribute is one popup toggle. */
+   <html>. Nothing here runs a model; each attribute is one popup toggle.
+
+   Both YouTube sites are covered. `ytd-` elements are www.youtube.com, `ytm-`
+   are m.youtube.com, and the newer `*-view-model` elements and `yt*ViewModel`
+   classes are shared by both. A selector that matches nothing on the site in
+   front of it costs nothing, so the pairs live together, per feature. */
 
 /* Shorts: the shelf, the sidebar entries, the Shorts tab on channels and any
    single Short that lands in a feed, search results or notifications. */
@@ -20,7 +25,18 @@ html[data-aitf-yt-shorts] ytd-guide-entry-renderer:has(a[href='/shorts']),
 html[data-aitf-yt-shorts] ytd-mini-guide-entry-renderer:has(a[title='Shorts']),
 html[data-aitf-yt-shorts] ytd-mini-guide-entry-renderer:has(a[href='/shorts']),
 html[data-aitf-yt-shorts] yt-tab-shape[tab-title='Shorts'],
-html[data-aitf-yt-shorts] yt-chip-cloud-chip-renderer:has(yt-formatted-string[title='Shorts']) {
+html[data-aitf-yt-shorts] yt-chip-cloud-chip-renderer:has(yt-formatted-string[title='Shorts']),
+html[data-aitf-yt-shorts] ytm-reel-shelf-renderer,
+html[data-aitf-yt-shorts] ytm-shorts-lockup-view-model,
+html[data-aitf-yt-shorts] ytm-shorts-lockup-view-model-v2,
+html[data-aitf-yt-shorts] ytm-item-section-renderer:has(> lazy-list > ytm-reel-shelf-renderer:only-child),
+html[data-aitf-yt-shorts] ytm-rich-item-renderer:has(a[href^='/shorts/']),
+html[data-aitf-yt-shorts] ytm-video-with-context-renderer:has(a[href^='/shorts/']),
+html[data-aitf-yt-shorts] ytm-compact-video-renderer:has(a[href^='/shorts/']),
+html[data-aitf-yt-shorts] ytm-chip-cloud-chip-renderer:has([title='Shorts']),
+/* Mobile puts navigation in a bar along the bottom rather than a sidebar. */
+html[data-aitf-yt-shorts] ytm-pivot-bar-item-renderer:has(a[href^='/shorts']),
+html[data-aitf-yt-shorts] ytm-pivot-bar-item-renderer:has(.pivot-shorts) {
   display: none !important;
 }
 
@@ -28,7 +44,10 @@ html[data-aitf-yt-shorts] yt-chip-cloud-chip-renderer:has(yt-formatted-string[ti
    (duration, live, watched) is untouched, so cards still scan. */
 html[data-aitf-yt-thumbs='blurred'] yt-thumbnail-view-model,
 html[data-aitf-yt-thumbs='blurred'] ytd-thumbnail,
-html[data-aitf-yt-thumbs='blurred'] ytd-playlist-thumbnail {
+html[data-aitf-yt-thumbs='blurred'] ytd-playlist-thumbnail,
+html[data-aitf-yt-thumbs='blurred'] ytm-thumbnail-cover,
+html[data-aitf-yt-thumbs='blurred'] .video-thumbnail-container,
+html[data-aitf-yt-thumbs='blurred'] .video-thumbnail-container-fluid {
   overflow: hidden !important;
   border-radius: 12px;
 }
@@ -36,7 +55,9 @@ html[data-aitf-yt-thumbs='blurred'] .ytThumbnailViewModelImage,
 html[data-aitf-yt-thumbs='blurred'] ytd-thumbnail yt-image,
 html[data-aitf-yt-thumbs='blurred'] ytd-thumbnail img,
 html[data-aitf-yt-thumbs='blurred'] ytd-playlist-thumbnail img,
-html[data-aitf-yt-thumbs='blurred'] .shortsLockupViewModelHostThumbnailParentContainer img {
+html[data-aitf-yt-thumbs='blurred'] .shortsLockupViewModelHostThumbnailParentContainer img,
+html[data-aitf-yt-thumbs='blurred'] ytm-thumbnail-cover img,
+html[data-aitf-yt-thumbs='blurred'] .video-thumbnail-container img {
   filter: blur(22px) saturate(0.7) !important;
   transform: scale(1.15);
 }
@@ -46,7 +67,10 @@ html[data-aitf-yt-thumbs='blurred'] .shortsLockupViewModelHostThumbnailParentCon
    duration stays exactly where the eye expects it: bottom right. */
 html[data-aitf-yt-thumbs='hidden'] yt-thumbnail-view-model,
 html[data-aitf-yt-thumbs='hidden'] ytd-thumbnail,
-html[data-aitf-yt-thumbs='hidden'] ytd-playlist-thumbnail {
+html[data-aitf-yt-thumbs='hidden'] ytd-playlist-thumbnail,
+html[data-aitf-yt-thumbs='hidden'] ytm-thumbnail-cover,
+html[data-aitf-yt-thumbs='hidden'] .video-thumbnail-container,
+html[data-aitf-yt-thumbs='hidden'] .video-thumbnail-container-fluid {
   display: flex !important;
   flex-direction: column !important;
   align-items: flex-end !important;
@@ -79,14 +103,19 @@ html[data-aitf-yt-thumbs='hidden'] ytd-thumbnail-overlay-resume-playback-rendere
 html[data-aitf-yt-thumbs='hidden'] ytd-thumbnail-overlay-toggle-button-renderer,
 html[data-aitf-yt-thumbs='hidden'] ytd-thumbnail-overlay-now-playing-renderer,
 html[data-aitf-yt-thumbs='hidden'] .ytThumbnailViewModelHostAdDisclosureBannerContainer,
-html[data-aitf-yt-thumbs='hidden'] thumbnail-overlay-button-view-model {
+html[data-aitf-yt-thumbs='hidden'] thumbnail-overlay-button-view-model,
+html[data-aitf-yt-thumbs='hidden'] ytm-thumbnail-cover img,
+html[data-aitf-yt-thumbs='hidden'] .video-thumbnail-container img,
+html[data-aitf-yt-thumbs='hidden'] ytm-thumbnail-overlay-resume-playback-renderer {
   display: none !important;
 }
 html[data-aitf-yt-thumbs='hidden'] yt-thumbnail-bottom-overlay-view-model,
 html[data-aitf-yt-thumbs='hidden'] yt-thumbnail-overlay-badge-view-model,
 html[data-aitf-yt-thumbs='hidden'] .ytThumbnailBottomOverlayViewModelBadgeContainer,
 html[data-aitf-yt-thumbs='hidden'] ytd-thumbnail #overlays,
-html[data-aitf-yt-thumbs='hidden'] ytd-thumbnail-overlay-time-status-renderer {
+html[data-aitf-yt-thumbs='hidden'] ytd-thumbnail-overlay-time-status-renderer,
+html[data-aitf-yt-thumbs='hidden'] ytm-thumbnail-overlay-time-status-renderer,
+html[data-aitf-yt-thumbs='hidden'] .thumbnail-overlay-time-status-renderer {
   position: static !important;
   inset: auto !important;
   margin: 0 !important;
@@ -119,7 +148,12 @@ html[data-aitf-yt-comments] ytd-comments#comments,
 html[data-aitf-yt-comments] ytd-comments-entry-point-header-renderer,
 html[data-aitf-yt-comments]
   ytd-engagement-panel-section-list-renderer[target-id='engagement-panel-comments-section'],
-html[data-aitf-yt-comments] ytd-reel-player-overlay-renderer #comments-button {
+html[data-aitf-yt-comments] ytd-reel-player-overlay-renderer #comments-button,
+html[data-aitf-yt-comments] ytm-comments-entry-point-teaser-renderer,
+html[data-aitf-yt-comments] ytm-comments-entry-point-header-renderer,
+html[data-aitf-yt-comments]
+  ytm-engagement-panel[data-panel-identifier='engagement-panel-comments-section'],
+html[data-aitf-yt-comments] .reel-comment-button {
   display: none !important;
 }
 
@@ -148,7 +182,15 @@ html[data-aitf-yt-grey-ui] yt-touch-feedback-shape,
 html[data-aitf-yt-grey-ui] badge-shape,
 html[data-aitf-yt-grey-ui] yt-thumbnail-bottom-overlay-view-model,
 html[data-aitf-yt-grey-ui] yt-thumbnail-overlay-badge-view-model,
-html[data-aitf-yt-grey-ui] ytd-thumbnail #overlays {
+html[data-aitf-yt-grey-ui] ytd-thumbnail #overlays,
+html[data-aitf-yt-grey-ui] ytm-mobile-topbar-renderer,
+html[data-aitf-yt-grey-ui] ytm-pivot-bar-renderer,
+html[data-aitf-yt-grey-ui] ytm-chip-cloud-renderer,
+html[data-aitf-yt-grey-ui] ytm-menu-renderer,
+html[data-aitf-yt-grey-ui] ytm-profile-icon,
+html[data-aitf-yt-grey-ui] ytm-slim-owner-renderer,
+html[data-aitf-yt-grey-ui] .ytm-channel-avatar,
+html[data-aitf-yt-grey-ui] ytm-thumbnail-overlay-time-status-renderer {
   filter: grayscale(1) !important;
 }
 html[data-aitf-yt-grey-content] .ytThumbnailViewModelImage,
@@ -163,6 +205,9 @@ html[data-aitf-yt-grey-content] #movie_player,
 html[data-aitf-yt-grey-content] ytd-reel-video-renderer #player-container,
 html[data-aitf-yt-grey-content] ytd-post-renderer #content-attachment,
 html[data-aitf-yt-grey-content] ytd-backstage-image-renderer,
-html[data-aitf-yt-grey-content] ytd-video-preview {
+html[data-aitf-yt-grey-content] ytd-video-preview,
+html[data-aitf-yt-grey-content] ytm-thumbnail-cover img,
+html[data-aitf-yt-grey-content] .video-thumbnail-container img,
+html[data-aitf-yt-grey-content] #player {
   filter: grayscale(1) !important;
 }
