@@ -106,15 +106,33 @@ function handle(message: Request) {
   });
 }
 
+/** Whether a message came from one of the extension's own pages, which are the
+ *  privileged callers. Desktop Chrome floats the popup in a panel of its own,
+ *  giving it no tab and exactly the popup's URL. Chromium ports with nowhere to
+ *  float it render it inside a tab instead — Kiwi on Android does — so the
+ *  absence of a tab does not identify it and the URL may carry a query string.
+ *  Coming from the extension's own URL is what actually separates the two: a
+ *  content script always reports the page it was injected into, and nothing
+ *  here is web-accessible, so no page can carry an extension URL of ours. */
+function fromExtensionPage(sender: chrome.runtime.MessageSender) {
+  // No URL and no tab is an extension context too; a content script has both.
+  if (!sender.url) return !sender.tab;
+  // A prefix, deliberately, not `URL.origin`: `chrome-extension:` is not a
+  // special scheme, so the standard parser gives every such URL the origin
+  // "null" and any extension's page would compare equal to ours. The trailing
+  // slash `getURL('')` leaves keeps a longer ID from matching as a prefix.
+  return sender.url.startsWith(chrome.runtime.getURL(''));
+}
+
 chrome.runtime.onMessage.addListener((raw: unknown, sender, respond) => {
   const program = Effect.gen(function* () {
     if (sender.id !== chrome.runtime.id)
       return yield* new OperationError({ message: 'Untrusted sender.' });
     const message = yield* Schema.decodeUnknown(Request)(raw);
-    const fromPopup = !sender.tab && sender.url === chrome.runtime.getURL('popup.html');
+    const privileged = fromExtensionPage(sender);
     const fromSite =
       sender.tab && /^https:\/\/(?:x\.com|twitter\.com|www\.youtube\.com)\//.test(sender.url ?? '');
-    if (!fromPopup && !(fromSite && contentRequests.has(message.type))) {
+    if (!privileged && !(fromSite && contentRequests.has(message.type))) {
       return yield* new OperationError({
         message: 'This operation is not available to content scripts.',
       });

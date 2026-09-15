@@ -18,6 +18,27 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 const noop = () => {};
 /** `https://x.com/*` reads as x.com to the person being asked about it. */
 const host = (origin: string) => origin.replace(/^https:\/\//, '').replace(/\/\*$/, '');
+const filtered = /^https:\/\/(?:x\.com|twitter\.com|www\.youtube\.com)\//;
+
+/** The page the reader was looking at when they opened Sharp. Desktop Chrome
+ *  floats the popup above the page, so that is simply the active tab. Where
+ *  there is nowhere to float it the popup opens in a tab of its own — Kiwi on
+ *  Android — and the active tab is the popup itself, so the page behind it is
+ *  the most recently touched one Sharp has anything to say about. */
+async function readerTab() {
+  // A prefix, not `URL.origin`, which is "null" for every `chrome-extension:`
+  // URL under the standard parser and so matches nothing usefully.
+  const own = chrome.runtime.getURL('');
+  const active = await chrome.tabs.query({ active: true, currentWindow: true });
+  const page = active.find((tab) => tab.url && !tab.url.startsWith(own));
+  if (page?.url) return page.url;
+  // Restricted to filtered sites, so the guess can only ever be between pages
+  // the popup has a section for, never a wrong claim about an unrelated tab.
+  const all = await chrome.tabs.query({});
+  return all
+    .filter((tab) => tab.url && filtered.test(tab.url))
+    .sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))[0]?.url;
+}
 
 function normalize(settings: Settings): Settings {
   const lines = (values: readonly string[], author = false) => [
@@ -86,16 +107,16 @@ export function App() {
         tone: 'bad',
       }),
     );
-    void chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
-      if (!tab?.url) return;
-      if (/^https:\/\/(?:x|twitter)\.com\//.test(tab.url)) {
+    void readerTab().then((url) => {
+      if (!url) return;
+      if (/^https:\/\/(?:x|twitter)\.com\//.test(url)) {
         setSite('x');
-        setThread(threadId(new URL(tab.url).pathname));
-      } else if (/^https:\/\/www\.youtube\.com\//.test(tab.url)) {
+        setThread(threadId(new URL(url).pathname));
+      } else if (/^https:\/\/www\.youtube\.com\//.test(url)) {
         setSite('youtube');
         setSection('youtube');
       }
-    });
+    }, noop);
     const onChange = (_changes: Record<string, chrome.storage.StorageChange>, area: string) => {
       if (area === 'local') void refresh().catch(() => {});
     };
