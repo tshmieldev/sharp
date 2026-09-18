@@ -1,6 +1,6 @@
 {
   "name": "ai-twitter-filter",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "private": true,
   "license": "MIT",
   "type": "module",
