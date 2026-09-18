@@ -64,6 +64,8 @@ function firstReplyAnchor(id: string): HTMLElement | null {
   if (!cell || !focal?.closest('[data-testid="primaryColumn"]')) return null;
   for (let next = cell.nextElementSibling; next; next = next.nextElementSibling) {
     if (!(next instanceof HTMLElement) || next.matches('.aitf-thread-control')) continue;
+    // X separates entries with empty cells, one straight after the focal post.
+    if (!next.textContent?.trim() && !next.querySelector(articleSelector)) continue;
     // Anchor on the first reply, and only on a reply: anything else after the
     // focal post is X's own furniture and not somewhere to mount a control.
     if (!next.matches('[data-testid="cellInnerDiv"]') || !next.querySelector(articleSelector)) {
@@ -121,7 +123,7 @@ function ThreadButton({ id, bypassed, send, isCurrent }: Props) {
       >
         {active ? <Check /> : <Mark />}
         <span>
-          {active ? 'Filter comments in this thread' : 'Show all comments in this thread'}
+          {active ? 'Showing all comments in this thread' : 'Show all comments in this thread'}
         </span>
       </button>
       {active && !error && (

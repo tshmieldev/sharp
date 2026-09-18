@@ -88,3 +88,18 @@ it('falls back to the top of the replies when there is no inline reply box', () 
   expect(root?.nextElementSibling?.classList.contains('reply')).toBe(true);
   control.dispose();
 });
+
+it('steps over the empty cell X puts between the opened post and its replies', () => {
+  // As captured on Kiwi: an empty cell follows the focal post's.
+  const spacer = `<div data-testid="cellInnerDiv"><div></div></div>`;
+  document.body.innerHTML =
+    `<div data-testid="primaryColumn"><div data-testid="cellInnerDiv"><div>` +
+    article('thenerd_be', ID) +
+    `</div></div>${spacer}${reply}</div>`;
+  history.replaceState(null, '', `/thenerd_be/status/${ID}`);
+  const control = new ThreadControl(async () => undefined as never);
+  control.update(settings({ filterComments: true }));
+  const root = document.querySelector('.aitf-thread-control');
+  expect(root?.nextElementSibling?.classList.contains('reply')).toBe(true);
+  control.dispose();
+});
