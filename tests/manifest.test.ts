@@ -41,6 +41,13 @@ it('packages the same files whichever key names the background script', () => {
 
 it('asks for exactly the origins the manifest declares for the filtered sites', () => {
   for (const origin of siteOrigins) expect(base.host_permissions).toContain(origin);
+  // Both ways: a site added to the manifest but not here would be injected into
+  // and never asked for, which on Firefox means a content script that silently
+  // never runs. A site here but not in the manifest asks for nothing useful.
+  const injected = new Set<string>(
+    base.content_scripts.flatMap((script: { matches: string[] }) => script.matches),
+  );
+  expect([...injected].sort()).toEqual([...siteOrigins].sort());
 });
 
 it('derives a provider origin, and none from a URL that cannot be one', () => {

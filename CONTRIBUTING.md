@@ -157,7 +157,13 @@ scripts/        Per-target extension build, manifest derivation, release, icons
 importing a site entry alone installs no listeners or observers. The background
 worker and popup remain separate extension entry points.
 
-**YouTube is rules only.** The adapter reads public settings, sets
+**YouTube is rules only, on both of its sites.** `www.youtube.com` and
+`m.youtube.com` run the same adapter: it sets attributes and the stylesheet
+decides what they mean, so the mobile site cost selectors rather than code.
+`ytd-` elements are the desktop site, `ytm-` the mobile one, and the newer
+`*-view-model` elements and `yt*ViewModel` classes are shared; a selector that
+matches nothing on the site in front of it costs nothing, so the pairs sit
+together per feature. The adapter reads public settings, sets
 `data-aitf-yt-shorts` and `data-aitf-yt-comments` on `<html>`, plus
 `data-aitf-yt-thumbs="blurred"` or `"hidden"`, and follows storage changes.
 Hidden thumbnails give up their height; the badges that sat on the picture

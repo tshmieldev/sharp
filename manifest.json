@@ -8,6 +8,7 @@
     "https://x.com/*",
     "https://twitter.com/*",
     "https://www.youtube.com/*",
+    "https://m.youtube.com/*",
     "https://openrouter.ai/*",
     "https://api.openai.com/*",
     "https://api.anthropic.com/*"
@@ -31,7 +32,7 @@
       "run_at": "document_start"
     },
     {
-      "matches": ["https://www.youtube.com/*"],
+      "matches": ["https://www.youtube.com/*", "https://m.youtube.com/*"],
       "js": ["content.js"],
       "css": ["content.css"],
       "run_at": "document_start"

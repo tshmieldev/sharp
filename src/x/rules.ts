@@ -17,6 +17,10 @@ export function createRules(settings: PublicSettings) {
     if (
       !settings.enabled ||
       context ||
+      // Every article on a thread page that is not the post itself or one of
+      // its ancestors is a reply, and replies are left alone unless the reader
+      // has asked for them. `thread` is empty everywhere but a thread page.
+      (Boolean(thread) && !settings.filterComments) ||
       settings.bypassedThreads.includes(thread) ||
       /^\/(i\/bookmarks|bookmarks|notifications|messages|settings)(?:\/|$)/.test(path) ||
       actors.some((actor) => allowed.has(actor))

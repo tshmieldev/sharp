@@ -9,7 +9,7 @@ import { ListSheet, type ListKey } from './ListSheet';
 import { ModelBrowser } from './ModelBrowser';
 import { Rail, type Section, type Site } from './Rail';
 import { XPanel, type XTab } from './XPanel';
-import { YouTubePanel } from './YouTubePanel';
+import { YouTubePanel, type YouTubeTab } from './YouTubePanel';
 import { Notice } from './ui';
 
 type Form = { draft: Settings; saved: Settings };
@@ -18,7 +18,7 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 const noop = () => {};
 /** `https://x.com/*` reads as x.com to the person being asked about it. */
 const host = (origin: string) => origin.replace(/^https:\/\//, '').replace(/\/\*$/, '');
-const filtered = /^https:\/\/(?:x\.com|twitter\.com|www\.youtube\.com)\//;
+const filtered = /^https:\/\/(?:x\.com|twitter\.com|(?:www|m)\.youtube\.com)\//;
 
 /** The page the reader was looking at when they opened Sharp. Desktop Chrome
  *  floats the popup above the page, so that is simply the active tab —
@@ -65,6 +65,7 @@ export function App() {
   const [section, setSection] = useState<Section>('x');
   const [xTab, setXTab] = useState<XTab>('filtering');
   const [generalTab, setGeneralTab] = useState<GeneralTab>('connection');
+  const [youtubeTab, setYoutubeTab] = useState<YouTubeTab>('filtering');
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [bytes, setBytes] = useState(0);
@@ -116,7 +117,7 @@ export function App() {
       if (/^https:\/\/(?:x|twitter)\.com\//.test(url)) {
         setSite('x');
         setThread(threadId(new URL(url).pathname));
-      } else if (/^https:\/\/www\.youtube\.com\//.test(url)) {
+      } else if (/^https:\/\/(?:www|m)\.youtube\.com\//.test(url)) {
         setSite('youtube');
         setSection('youtube');
       }
@@ -294,9 +295,13 @@ export function App() {
                 ['filtering', 'Filtering'],
                 ['rules', 'Rules'],
                 ['activity', 'Activity'],
+                ['misc', 'Misc'],
               ] as const)
             : section === 'youtube'
-              ? ([['filtering', 'Filtering']] as const)
+              ? ([
+                  ['filtering', 'Filtering'],
+                  ['misc', 'Misc'],
+                ] as const)
               : ([
                   ['connection', 'Connection'],
                   ['appearance', 'Appearance'],
@@ -309,11 +314,12 @@ export function App() {
               class="tab"
               role="tab"
               aria-selected={
-                section === 'x' ? xTab === id : section === 'youtube' || generalTab === id
+                (section === 'x' ? xTab : section === 'youtube' ? youtubeTab : generalTab) === id
               }
               onClick={() => {
                 if (section === 'x') setXTab(id as XTab);
-                else if (section === 'general') setGeneralTab(id as GeneralTab);
+                else if (section === 'youtube') setYoutubeTab(id as YouTubeTab);
+                else setGeneralTab(id as GeneralTab);
               }}
             >
               {label}
@@ -394,7 +400,7 @@ export function App() {
               }
             />
           ) : section === 'youtube' ? (
-            <YouTubePanel {...editor} />
+            <YouTubePanel {...editor} tab={youtubeTab} />
           ) : (
             <GeneralPanel
               {...editor}

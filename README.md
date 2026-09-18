@@ -41,7 +41,8 @@ Describe what you want to see — or never see again — in plain language.
 - **Any OpenAI-compatible provider.** OpenRouter, OpenAI, Anthropic, or your
   own endpoint.
 - **YouTube, the quiet way.** Hide Shorts, hide comments, and show, blur or
-  drop thumbnails. Durations stay. No model involved.
+  drop thumbnails. Durations stay. No model involved. Works on the mobile site
+  too.
 - **Greyscale.** Wash the colour out of the chrome, the content, or both, on X
   and on YouTube. Less pull, same information.
 

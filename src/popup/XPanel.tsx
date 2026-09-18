@@ -6,7 +6,7 @@ import * as fmt from './format';
 import { lists, type ListKey } from './ListSheet';
 import { RangeField, ToggleRow, type SettingsEditor } from './ui';
 
-export type XTab = 'filtering' | 'rules' | 'activity';
+export type XTab = 'filtering' | 'rules' | 'activity' | 'misc';
 
 // A hidden post is one the reader did not have to read past. This is roughly
 // the time a post holds the eye on the way by, and the number is labelled as
@@ -90,6 +90,26 @@ export function XPanel({
     setNaming(false);
     onSavePreset(name);
   };
+
+  if (tab === 'misc') {
+    return (
+      <div class="panel">
+        <section class="group">
+          <h2>Greyscale</h2>
+          <ToggleRow
+            label="Greyscale UI"
+            checked={settings.greyscaleUi}
+            onChange={(value) => update('greyscaleUi', value)}
+          />
+          <ToggleRow
+            label="Greyscale content"
+            checked={settings.greyscaleContent}
+            onChange={(value) => update('greyscaleContent', value)}
+          />
+        </section>
+      </div>
+    );
+  }
 
   if (tab === 'rules') {
     return (
@@ -332,6 +352,20 @@ export function XPanel({
         )}
       </section>
 
+      <section class="group">
+        <h2>Comments</h2>
+        <ToggleRow
+          label="Filter comments"
+          hint={
+            settings.filterComments
+              ? 'Replies under a post are judged like any other post.'
+              : 'Replies under a post are left alone. Only the timeline is filtered.'
+          }
+          checked={settings.filterComments}
+          onChange={(value) => update('filterComments', value)}
+        />
+      </section>
+
       {settings.corrections.length > 0 && (
         <section class="group">
           <h2>Corrections</h2>
@@ -409,20 +443,6 @@ export function XPanel({
           hint="Needs a vision-capable model and costs more per post."
           checked={settings.analyzeImages}
           onChange={(value) => update('analyzeImages', value)}
-        />
-      </section>
-
-      <section class="group">
-        <h2>Misc</h2>
-        <ToggleRow
-          label="Greyscale UI"
-          checked={settings.greyscaleUi}
-          onChange={(value) => update('greyscaleUi', value)}
-        />
-        <ToggleRow
-          label="Greyscale content"
-          checked={settings.greyscaleContent}
-          onChange={(value) => update('greyscaleContent', value)}
         />
       </section>
     </div>

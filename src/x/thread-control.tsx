@@ -47,7 +47,38 @@ export function replySection(id: string): HTMLElement | null {
     if (!section) continue;
     if (!candidates.includes(section)) candidates.push(section);
   }
-  return candidates.length === 1 ? candidates[0]! : null;
+  if (candidates.length === 1) return candidates[0]!;
+  // More than one match means the composer was not identified confidently, and
+  // guessing is worse than showing nothing. None at all is the mobile layout.
+  return candidates.length === 0 ? firstReplyAnchor(id) : null;
+}
+
+/** Where the control goes when there is no inline composer to sit above.
+ *  Replying on mobile x.com opens a view of its own, so the equivalent place is
+ *  the top of the replies: inside the first reply's cell, above its content.
+ *  Inside, because a sibling of a virtualised cell is not measured — the same
+ *  reason the desktop path descends into the cell it finds. */
+function firstReplyAnchor(id: string): HTMLElement | null {
+  const focal = focalArticle(id);
+  const cell = focal?.closest<HTMLElement>('[data-testid="cellInnerDiv"]');
+  if (!cell || !focal?.closest('[data-testid="primaryColumn"]')) return null;
+  for (let next = cell.nextElementSibling; next; next = next.nextElementSibling) {
+    if (!(next instanceof HTMLElement) || next.matches('.aitf-thread-control')) continue;
+    // X separates entries with empty cells, one straight after the focal post.
+    if (!next.textContent?.trim() && !next.querySelector(articleSelector)) continue;
+    // Anchor on the first reply, and only on a reply: anything else after the
+    // focal post is X's own furniture and not somewhere to mount a control.
+    if (!next.matches('[data-testid="cellInnerDiv"]') || !next.querySelector(articleSelector)) {
+      return null;
+    }
+    return (
+      [...next.children].find(
+        (child): child is HTMLElement =>
+          child instanceof HTMLElement && !child.matches('.aitf-thread-control'),
+      ) ?? null
+    );
+  }
+  return null;
 }
 
 type Props = {
@@ -92,7 +123,7 @@ function ThreadButton({ id, bypassed, send, isCurrent }: Props) {
       >
         {active ? <Check /> : <Mark />}
         <span>
-          {active ? 'Filter comments in this thread' : 'Show all comments in this thread'}
+          {active ? 'Showing all comments in this thread' : 'Show all comments in this thread'}
         </span>
       </button>
       {active && !error && (
@@ -119,6 +150,11 @@ export class ThreadControl {
   constructor(private readonly send: typeof request = request) {}
 
   update(settings: PublicSettings) {
+    // Nothing to switch off for one thread when no reply is judged anywhere.
+    if (!settings.filterComments) {
+      this.dispose();
+      return;
+    }
     const id = currentThread();
     const section = id ? replySection(id) : null;
     if (!section) {

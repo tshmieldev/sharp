@@ -1,7 +1,9 @@
-// Desktop X portals its post dropdown into #layers. No generated class names or
-// translated labels are used for selection. Unknown layouts are left untouched.
+// X portals its post menu into #layers: a dropdown at desktop widths, a bottom
+// sheet at phone widths. No generated class names or translated labels are used
+// for selection. Unknown layouts are left untouched.
 export const moreSelector = '[data-testid="caret"]';
-export const dropdownSelector = '[data-testid="Dropdown"]';
+export const sheetSelector = '[data-testid="sheetDialog"]';
+export const dropdownSelector = `[data-testid="Dropdown"], ${sheetSelector}`;
 const itemSelector = '[role="menuitem"]';
 
 export function visible(element: HTMLElement): boolean {
@@ -17,7 +19,11 @@ export function visible(element: HTMLElement): boolean {
 /** The rendered menu is the source of truth, including when its click was missed
  * or its originating article has been virtualized away. */
 export function menuPost(dropdown: HTMLElement): { id: string; handle: string } | null {
-  if (!dropdown.closest('[role="menu"]') || !visible(dropdown)) return null;
+  // A sheet has no menu role around it. Other sheets (repost, share) use the
+  // same container, which is fine: none carries the engagements link below,
+  // and that link, not the container, is what identifies the post.
+  const menu = dropdown.closest('[role="menu"]') || dropdown.matches(sheetSelector);
+  if (!menu || !visible(dropdown)) return null;
   const links = dropdown.querySelectorAll<HTMLAnchorElement>('a[data-testid="tweetEngagements"]');
   if (links.length !== 1) return null;
   let url: URL;

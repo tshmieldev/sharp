@@ -6,7 +6,29 @@ const thumbnailOptions = [
   { value: 'hidden', label: 'Hidden' },
 ] as const;
 
-export function YouTubePanel({ settings, update }: SettingsEditor) {
+export type YouTubeTab = 'filtering' | 'misc';
+
+export function YouTubePanel({ settings, update, tab }: SettingsEditor & { tab: YouTubeTab }) {
+  if (tab === 'misc') {
+    return (
+      <div class="panel">
+        <section class="group">
+          <h2>Greyscale</h2>
+          <ToggleRow
+            label="Greyscale UI"
+            checked={settings.youtubeGreyscaleUi}
+            onChange={(value) => update('youtubeGreyscaleUi', value)}
+          />
+          <ToggleRow
+            label="Greyscale content"
+            checked={settings.youtubeGreyscaleContent}
+            onChange={(value) => update('youtubeGreyscaleContent', value)}
+          />
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div class="panel">
       <section class="group">
@@ -36,19 +58,6 @@ export function YouTubePanel({ settings, update }: SettingsEditor) {
           value={settings.thumbnails}
           options={thumbnailOptions}
           onChange={(value) => update('thumbnails', value)}
-        />
-      </section>
-      <section class="group">
-        <h2>Misc</h2>
-        <ToggleRow
-          label="Greyscale UI"
-          checked={settings.youtubeGreyscaleUi}
-          onChange={(value) => update('youtubeGreyscaleUi', value)}
-        />
-        <ToggleRow
-          label="Greyscale content"
-          checked={settings.youtubeGreyscaleContent}
-          onChange={(value) => update('youtubeGreyscaleContent', value)}
         />
       </section>
     </div>

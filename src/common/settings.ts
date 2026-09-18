@@ -41,6 +41,7 @@ export const Settings = Schema.Struct({
   presets: Schema.Array(Preset),
   corrections: Schema.Array(Correction).pipe(Schema.maxItems(MAX_CORRECTIONS)),
   notInterested: Schema.Boolean,
+  filterComments: Schema.Boolean,
   analyzeImages: Schema.Boolean,
   maxImagesPerPost: boundedInt(1, 4),
   hideStyle: Schema.Literal('collapse', 'blur'),
@@ -83,6 +84,7 @@ export const defaults: Settings = {
   presets: [],
   corrections: [],
   notInterested: false,
+  filterComments: false,
   analyzeImages: false,
   maxImagesPerPost: 2,
   hideStyle: 'collapse',
@@ -138,6 +140,7 @@ export const siteOrigins = [
   'https://x.com/*',
   'https://twitter.com/*',
   'https://www.youtube.com/*',
+  'https://m.youtube.com/*',
 ] as const;
 
 /** The origin the configured provider is reached at, if it has a usable one. A
