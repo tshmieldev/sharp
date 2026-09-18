@@ -8,6 +8,7 @@ import {
   menuPost,
   moreSelector,
   nativeItems,
+  sheetSelector,
   visible,
 } from './post-menu-dom';
 
@@ -91,7 +92,9 @@ export function installPostMenu(
     root.setAttribute('aria-label', 'Sharp');
     matchMenuStyle(root, sample);
     // Below X's own actions: the extension adds to the menu, it does not lead it.
-    dropdown.append(root);
+    // Directly after the last of them, so a sheet's Cancel button stays last.
+    if (sample.parentElement === dropdown) sample.after(root);
+    else dropdown.append(root);
     const path = location.pathname;
     const isCurrent = () => {
       const identity = menuPost(dropdown);
@@ -127,6 +130,16 @@ export function installPostMenu(
           }),
         );
         if (current?.root === root) cancel();
+        // A sheet closes from its backdrop and need not listen for Escape. Only
+        // if it is still open a frame later, so it is never closed twice.
+        if (dropdown.matches(sheetSelector)) {
+          const mask = dropdown.parentElement?.querySelector<HTMLElement>(
+            ':scope > [data-testid="mask"]',
+          );
+          requestAnimationFrame(() => {
+            if (mask?.isConnected && dropdown.isConnected && visible(dropdown)) mask.click();
+          });
+        }
       },
     });
     const removeKeyboard = installMenuKeyboard(dropdown, root);

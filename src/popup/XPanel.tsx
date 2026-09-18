@@ -332,6 +332,24 @@ export function XPanel({
         )}
       </section>
 
+      <section class="group">
+        <h2>Comments</h2>
+        <ToggleRow
+          label="Filter comments"
+          hint={
+            settings.filterComments
+              ? 'Replies under a post are judged like any other post.'
+              : 'Replies under a post are left alone. Only the timeline is filtered.'
+          }
+          checked={settings.filterComments}
+          onChange={(value) => update('filterComments', value)}
+        />
+        <p class="note tight">
+          The post you opened and everything it replies to always show, either way. With this on, a
+          control above the replies turns filtering off for one thread.
+        </p>
+      </section>
+
       {settings.corrections.length > 0 && (
         <section class="group">
           <h2>Corrections</h2>

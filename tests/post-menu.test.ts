@@ -71,3 +71,60 @@ it('offers to teach the model only when a model is configured', () => {
   act(() => rows.at(-1)!.click());
   expect(correct).toHaveBeenCalledWith('42', 'hide');
 });
+
+/** The phone-width menu from a Kiwi capture: a bottom sheet, no menu role,
+ *  a backdrop beside it and X's own Cancel button last. */
+const sheet = (items: string) => `<div id="layers"><div role="group"><div>
+    <div data-testid="mask"></div>
+    <div data-testid="sheetDialog">
+      <div role="menuitem"><span>Not interested in this post</span></div>
+      <div role="menuitem"><span>Follow @cifilter</span></div>
+      <div role="menuitem" data-testid="block"><span>Block @cifilter</span></div>
+      ${items}
+      <a role="menuitem" href="/i/communitynotes/noterequest/2100245563170013389">
+        Request Community Note
+      </a>
+      <button type="button">Cancel</button>
+    </div>
+  </div></div></div>`;
+
+it('adds author rules to the bottom sheet X shows at phone widths, above Cancel', async () => {
+  const { chrome } = mockChrome();
+  chrome.runtime.sendMessage.mockResolvedValue({ ok: true });
+  document.body.innerHTML = sheet(`<a role="menuitem" data-testid="tweetEngagements"
+    href="/cifilter/status/2100245563170013389/quotes">View post activity</a>`);
+  const mask = document.querySelector<HTMLElement>('[data-testid="mask"]')!;
+  const dismissed = vi.fn();
+  mask.addEventListener('click', dismissed);
+  act(() => {
+    dispose = installPostMenu(() => publicSettings(defaults));
+  });
+  const rows = [...document.querySelectorAll<HTMLButtonElement>('.aitf-menu-action')];
+  expect(rows.map((row) => row.textContent)).toEqual([
+    'Never filter @cifilter',
+    'Always hide @cifilter',
+  ]);
+  const children = [...document.querySelector('[data-testid="sheetDialog"]')!.children];
+  expect(children.at(-1)?.textContent).toBe('Cancel');
+  expect(children.at(-2)?.classList.contains('aitf-post-menu')).toBe(true);
+  await act(async () => {
+    rows[0]!.click();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+  expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
+    type: 'SET_AUTHOR_RULE',
+    handle: 'cifilter',
+    rule: 'allow',
+  });
+  // Nothing in the test answers Escape, so the sheet is closed from its backdrop.
+  expect(dismissed).toHaveBeenCalledOnce();
+});
+
+it('leaves other sheets alone, since only the post menu identifies a post', () => {
+  mockChrome();
+  document.body.innerHTML = sheet('');
+  act(() => {
+    dispose = installPostMenu(() => publicSettings(defaults));
+  });
+  expect(document.querySelector('.aitf-post-menu')).toBeNull();
+});
