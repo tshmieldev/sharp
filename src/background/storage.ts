@@ -6,6 +6,7 @@ import {
   Settings,
   type SettingsPatch,
   type ListKey,
+  upgrade,
 } from '../common/settings';
 import type { Post } from '../common/post';
 import type { CorrectionVerdict } from '../common/messages';
@@ -35,10 +36,10 @@ export const getSettings = initializationLock.withPermits(1)(
       yield* attempt(() => chrome.storage.sync.remove('apiKeys'));
       initialized = true;
     }
-    // Settings saved by an older build lack fields added since; defaults fill
+    // Settings saved by an older build lack fields added since; `upgrade` fills
     // them in rather than failing the whole decode.
     const stored = typeof local.settings === 'object' && local.settings ? local.settings : {};
-    return yield* Schema.decodeUnknown(Settings)({ ...defaults, ...stored });
+    return yield* Schema.decodeUnknown(Settings)(upgrade(stored as Record<string, unknown>));
   }),
 );
 

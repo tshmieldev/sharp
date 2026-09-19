@@ -1,10 +1,17 @@
 import { orphaned, request } from '../common/messages';
 import type { Post, Verdict } from '../common/post';
-import { decisionScope, type PublicSettings } from '../common/settings';
+import {
+  closeCallLine,
+  decisionScope,
+  readVerdict,
+  requestPlan,
+  type PublicSettings,
+} from '../common/settings';
 import { authorRule } from '../common/author-rules';
 import type { CorrectionVerdict } from '../common/messages';
 import * as extract from './extract';
 import { createRules } from './rules';
+import * as inspector from './inspector';
 import * as view from './view';
 import { ThreadControl } from './thread-control';
 import { NotInterested } from './not-interested';
@@ -143,7 +150,7 @@ export class TimelineController {
   /** What the banner said for each hidden post, so the card can say it too. */
   private hiddenInfo = new Map<
     string,
-    { handle: string; name: string; reason: string; unsure: boolean }
+    { handle: string; name: string; reason: string; unsure: boolean; score?: number }
   >();
 
   constructor(private readonly send: typeof request = request) {
@@ -250,6 +257,7 @@ export class TimelineController {
   stop() {
     this.stopped = true;
     this.generation++;
+    inspector.closeInspector();
     this.observer?.disconnect();
     window.clearTimeout(this.scanTimer);
     window.clearTimeout(this.batchTimer);
@@ -398,10 +406,35 @@ export class TimelineController {
           settled.revealed = true;
           this.scan();
         });
-      const verdict = record.phase.type === 'decided' ? record.phase.verdict : null;
+      // A scored verdict is read against the reader's lines as they stand now,
+      // so moving either one re-reads what is on the page for free.
+      const verdict =
+        record.phase.type === 'decided' ? readVerdict(this.settings, record.phase.verdict) : null;
+      const threshold = closeCallLine(this.settings);
+      const hideFrom = this.settings.hideFrom;
+      // Debug mode: every model decision can be opened in the inspector.
+      const inspect =
+        this.settings.debug && verdict && decision === 'ai'
+          ? () => {
+              const score = verdict.score;
+              inspector.openInspector({
+                post: settled.post,
+                name: extract.author(article).name,
+                verdict,
+                threshold,
+                hideFrom,
+                unsure:
+                  score !== undefined ? verdict.hide && score < threshold : Boolean(verdict.unsure),
+              });
+            }
+          : undefined;
       if (record.revealed && verdict?.hide) {
         // Overruled by hand: the post is back, with a way to say why.
-        apply({ kind: 'revealed', recourse: this.recourse(settled.post) });
+        apply({
+          kind: 'revealed',
+          recourse: this.recourse(settled.post),
+          ...(inspect ? { inspect } : {}),
+        });
         continue;
       }
       if (record.revealed || decision === 'show' || waitingForFocal) {
@@ -419,12 +452,18 @@ export class TimelineController {
       }
       const reason = decision !== 'ai' ? decision : verdict?.hide ? verdict.reason : '';
       if (reason) {
-        const unsure = decision === 'ai' && Boolean(verdict?.unsure);
+        // A classifier's probability is judged against the threshold as it
+        // stands now, so moving the slider re-reads cached verdicts for free.
+        const score = decision === 'ai' ? verdict?.score : undefined;
+        const unsure =
+          decision === 'ai' && (score !== undefined ? score < threshold : Boolean(verdict?.unsure));
         apply({
           kind: 'hidden',
           name: extract.author(article).name,
           reason,
           unsure,
+          ...(score !== undefined ? { score, threshold, hideFrom } : {}),
+          ...(inspect ? { inspect } : {}),
           // A close call keeps its banner even when everything else is gone.
           style: this.settings.hideFully && !unsure ? 'remove' : this.settings.hideStyle,
           showAuthor: this.settings.showAuthor,
@@ -438,10 +477,16 @@ export class TimelineController {
         // teach anything. A close call is never reported: X's ranking should
         // learn only from verdicts Sharp would stand behind.
         if (this.settings.notInterested && !unsure && /^\/home\/?$/.test(this.path))
-          this.report(article, key, reason);
+          this.report(article, key, reason, score);
       } else if (record.phase.type === 'queued' || record.phase.type === 'running') {
         // A verdict is still outstanding: mark the post rather than let it settle twice.
         apply({ kind: 'pending' });
+      } else if (inspect) {
+        apply({
+          kind: 'kept',
+          inspect,
+          ...(verdict?.score !== undefined ? { score: verdict.score, threshold, hideFrom } : {}),
+        });
       } else {
         apply({ kind: 'show' });
       }
@@ -490,10 +535,16 @@ export class TimelineController {
 
   /** Tell X once per post. Over the wire when the page has given up the
    *  metadata and headers; through the menu otherwise, or if X refuses. */
-  private report(article: HTMLElement, key: string, reason: string) {
+  private report(article: HTMLElement, key: string, reason: string, score?: number) {
     if (this.reported.has(key) || this.told.has(key)) return;
     const author = extract.author(article);
-    this.hiddenInfo.set(key, { handle: author.handle, name: author.name, reason, unsure: false });
+    this.hiddenInfo.set(key, {
+      handle: author.handle,
+      name: author.name,
+      reason,
+      unsure: false,
+      ...(score !== undefined ? { score } : {}),
+    });
     if (!this.feedback.ready(key)) {
       this.notInterested.request(article, key);
       return;
@@ -695,6 +746,13 @@ export class TimelineController {
         style: this.settings.hideFully && !info.unsure ? 'remove' : this.settings.hideStyle,
         name: info.name,
         reason: info.reason,
+        ...(info.score !== undefined
+          ? {
+              score: info.score,
+              threshold: closeCallLine(this.settings),
+              hideFrom: this.settings.hideFrom,
+            }
+          : {}),
         showAuthor: this.settings.showAuthor,
         acked: entry.acked,
         onUndo: () => {
@@ -713,7 +771,11 @@ export class TimelineController {
   }
 
   private scheduleFlush(delay = BATCH_WINDOW) {
-    if (this.stopped || this.batchTimer || this.inFlight >= (this.settings?.concurrency ?? 1))
+    if (
+      this.stopped ||
+      this.batchTimer ||
+      this.inFlight >= (this.settings ? requestPlan(this.settings).inFlight : 1)
+    )
       return;
     this.batchTimer = window.setTimeout(() => {
       this.batchTimer = 0;
@@ -725,11 +787,12 @@ export class TimelineController {
    *  starts the next one immediately; a partial one waits out the window. */
   private flush() {
     if (this.stopped || !this.settings || !this.rules) return;
-    if (this.inFlight >= this.settings.concurrency) return;
+    const plan = requestPlan(this.settings);
+    if (this.inFlight >= plan.inFlight) return;
     const thread = extract.currentThread();
     const focal = extract.focalArticle(thread);
     if (thread && !focal && Date.now() - this.openedAt < 2500) return;
-    const limit = this.settings.batchSize;
+    const limit = plan.batchSize;
     const selected = new Map<string, RecordState>();
     // Re-read mounted posts and current rules immediately before spending money.
     for (const article of document.querySelectorAll<HTMLElement>(extract.articleSelector)) {

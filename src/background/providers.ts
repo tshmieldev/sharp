@@ -1,7 +1,8 @@
 import { Data, Effect, Schema } from 'effect';
-import { providers, type Settings } from '../common/settings';
-import type { Post, Verdict } from '../common/post';
+import { providers, usesClassifier, type Settings } from '../common/settings';
+import type { Post, Trace, Verdict } from '../common/post';
 import { parseVerdicts } from './verdicts';
+import { classifyWithClassifier } from './classifier';
 
 export class ProviderError extends Data.TaggedError('ProviderError')<{
   message: string;
@@ -60,11 +61,22 @@ const ProviderResponse = Schema.Struct({
 });
 
 function fetchJson(settings: Settings, path: string, body?: unknown) {
+  return requestJson(settings, `${endpoint(settings)}${path}`, body);
+}
+
+/** The provider's key and error handling, for a URL outside its usual base.
+ *  `auth` replaces the chat provider's headers, for a request under another key. */
+export function requestJson(
+  settings: Settings,
+  url: string,
+  body?: unknown,
+  auth?: Record<string, string>,
+) {
   return Effect.tryPromise({
     try: async (signal) => {
-      const response = await fetch(`${endpoint(settings)}${path}`, {
+      const response = await fetch(url, {
         method: body ? 'POST' : 'GET',
-        headers: headers(settings),
+        headers: auth ?? headers(settings),
         body: body ? JSON.stringify(body) : undefined,
         signal,
         redirect: 'error',
@@ -165,17 +177,21 @@ Use an empty reason for posts that should remain visible.
 }
 
 export function classify(settings: Settings, items: readonly Post[]) {
+  if (usesClassifier(settings)) return classifyWithClassifier(settings, items);
   return Effect.gen(function* () {
     if (!settings.apiKeys[settings.provider] || !settings.model || !settings.criteria.trim()) {
       return yield* new ProviderError({
         message: 'Set an API key, model and filter criteria first.',
       });
     }
+    const body = classificationBody(settings, items);
+    const requested = performance.now();
     const raw = yield* fetchJson(
       settings,
       settings.provider === 'anthropic' ? '/messages' : '/chat/completions',
-      classificationBody(settings, items),
+      body,
     );
+    const requestMs = performance.now() - requested;
     const data = yield* Schema.decodeUnknown(ProviderResponse)(raw);
     if (data.error)
       return yield* new ProviderError({
@@ -200,16 +216,33 @@ export function classify(settings: Settings, items: readonly Post[]) {
         tokens,
       });
     const byId = new Map(rows.map((row) => [row.id, row]));
+    const at = Date.now();
     const verdicts: Verdict[] = items.map((item) => {
       const row = byId.get(item.key);
+      // One request judges the whole batch, so each post's trace carries all of it.
+      const trace: Trace | undefined = settings.debug
+        ? {
+            source: 'llm',
+            model: settings.model,
+            at,
+            totalMs: requestMs,
+            requestMs,
+            batch: items.length,
+            tokens,
+            images: settings.analyzeImages ? item.images.map((url) => ({ url })) : [],
+            request: body,
+            response: { verdict: row ?? null, text },
+          }
+        : undefined;
       return row
         ? {
             key: item.key,
             hide: row.hide,
             reason: row.hide ? row.reason || 'Matched your filter' : '',
             ...(row.hide && row.unsure ? { unsure: true } : {}),
+            ...(trace ? { trace } : {}),
           }
-        : { key: item.key, hide: false, reason: '', failed: true };
+        : { key: item.key, hide: false, reason: '', failed: true, ...(trace ? { trace } : {}) };
     });
     return { verdicts, tokens };
   });

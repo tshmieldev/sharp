@@ -292,17 +292,45 @@ svg {
 }
 .panel {
   display: grid;
-  gap: 18px;
+  gap: 12px;
 }
 .group {
   display: grid;
   gap: 9px;
 }
+/* A section is a sheet lifted off the page: its name in a band across the top,
+   its controls below. Anything that was a surface of its own inside it sinks
+   instead, so a sheet never holds another sheet. */
+.panel > .group {
+  --inset: 14px;
+  padding: var(--inset);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgb(20 18 40 / 0.04);
+}
 .group > h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 12px;
   font-weight: 650;
   letter-spacing: 0.005em;
   color: var(--text);
+}
+.panel > .group > h2 {
+  margin: calc(var(--inset) * -1) calc(var(--inset) * -1) 3px;
+  padding: 10px var(--inset);
+  border-bottom: 1px solid var(--line);
+  border-radius: 11px 11px 0 0;
+  background: color-mix(in srgb, var(--sunken) 55%, var(--surface));
+}
+.panel > .group :is(input:not([type='checkbox']):not([type='range']), textarea, select),
+.panel > .group :is(.card, .status-row, .model-card, .stats, .erow) {
+  background: var(--sunken);
+}
+.panel > .group :is(input, textarea, select):focus-visible {
+  background: var(--surface);
 }
 .note {
   font-size: 11.5px;
@@ -311,6 +339,21 @@ svg {
 }
 .note.tight {
   margin-top: -3px;
+}
+.note a {
+  color: var(--accent-text);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+.note a:hover {
+  text-decoration-thickness: 2px;
+}
+.note a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
 }
 .card {
   padding: 12px;
@@ -1199,4 +1242,168 @@ html[data-motion='reduced'] .spinner {
   font-size: 10.5px;
   font-weight: 550;
   text-align: center;
+}
+
+/* A field the reader can read but not change: the classifier's fixed model. */
+input:disabled {
+  border-style: dashed;
+  background: transparent;
+  color: var(--muted);
+  cursor: default;
+}
+
+/* Where a score lands: kept, close call, hidden. Each zone is a full-width
+   layer clipped to its span, so moving a line only animates clip-path and
+   transform. A 2px gap separates the zones. */
+.zones {
+  container-type: inline-size;
+  display: grid;
+  gap: 6px;
+  margin: 2px 0 6px;
+}
+.zones-marks {
+  position: relative;
+  height: 15px;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 15px;
+}
+/* Centred on its line, but never past either end of the bar. */
+.zones-mark {
+  position: absolute;
+  left: 0;
+  color: var(--text);
+  font-weight: 600;
+  white-space: nowrap;
+  transform: translateX(clamp(0px, calc(var(--at) * 100cqi - 50%), calc(100cqi - 100%)));
+  transition: transform 240ms var(--ease);
+}
+.zones-bar {
+  position: relative;
+  height: 10px;
+}
+.zones-track {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 99px;
+}
+.zone {
+  position: absolute;
+  inset: 0;
+  transition: clip-path 240ms var(--ease);
+}
+.zone.kept {
+  background: var(--line-strong);
+  clip-path: inset(0 calc((1 - var(--h)) * 100% + 1px) 0 0 round 2px);
+}
+.zone.close {
+  background: color-mix(in srgb, var(--danger) 42%, var(--surface));
+  clip-path: inset(0 calc((1 - var(--t)) * 100% + 1px) 0 calc(var(--h) * 100% + 1px) round 2px);
+}
+.zone.sure {
+  background: var(--danger);
+  clip-path: inset(0 0 0 calc(var(--t) * 100% + 1px) round 2px);
+}
+.zones-legend {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11.5px;
+  line-height: 15px;
+  color: var(--muted);
+}
+.zones-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.zones-legend span::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 3px;
+  background: var(--line-strong);
+}
+.zones-legend .close::before {
+  background: color-mix(in srgb, var(--danger) 42%, var(--surface));
+}
+.zones-legend .sure::before {
+  background: var(--danger);
+}
+
+/* The image range: the same bar drawn as a thin line, swelling to full height
+   over the chosen scores, with a thumb on each edge. Thickness marks the range,
+   so the zone colours stay true along the whole bar. The two range inputs lie over the
+   bar and pass clicks through everywhere but their thumbs, so each stays
+   grabbable. They overhang the bar by half a thumb so a thumb's centre sits
+   exactly on the score it sets. */
+.zones.windowed {
+  margin-bottom: 2px;
+}
+.zones-track.ghost {
+  clip-path: inset(3.5px 0 round 99px);
+}
+.zones.windowed .zones-mark {
+  color: var(--muted);
+  font-weight: 500;
+}
+.zones-window {
+  border-radius: 0;
+  clip-path: inset(0 calc((1 - var(--b)) * 100%) 0 calc(var(--a) * 100%));
+  transition: clip-path 240ms var(--ease);
+}
+input[type='range'].zones-thumb {
+  position: absolute;
+  top: -4px;
+  left: -7px;
+  width: calc(100% + 14px);
+  margin: 0;
+  appearance: none;
+  pointer-events: none;
+}
+input[type='range'].zones-thumb::-webkit-slider-runnable-track {
+  background: transparent;
+}
+input[type='range'].zones-thumb::-webkit-slider-thumb {
+  pointer-events: auto;
+  cursor: ew-resize;
+}
+input[type='range'].zones-thumb::-moz-range-track {
+  background: transparent;
+}
+input[type='range'].zones-thumb::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--surface);
+  border-radius: 99px;
+  background: var(--accent);
+  box-shadow: var(--shadow-pop);
+  pointer-events: auto;
+  cursor: ew-resize;
+}
+input[type='range'].zones-thumb:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.zones[data-disabled] {
+  opacity: 0.45;
+}
+.zones[data-disabled] input[type='range'].zones-thumb::-webkit-slider-thumb {
+  cursor: not-allowed;
+}
+
+/* A fixed value, like the classifier's model: readable, clearly not editable. */
+input:disabled {
+  border-style: dashed;
+  background: transparent;
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zone,
+  .zones-window,
+  .zones-mark {
+    transition: none;
+  }
 }

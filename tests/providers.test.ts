@@ -4,7 +4,8 @@ import { classify, classificationBody, endpoint } from '../src/background/provid
 import { parseVerdicts } from '../src/background/verdicts';
 import { defaults } from '../src/common/settings';
 
-const settings = { ...defaults, apiKeys: { openrouter: 'test-key' } };
+// The language-model path; the classifier path is tested on its own.
+const settings = { ...defaults, decisionMode: 'llm' as const, apiKeys: { openrouter: 'test-key' } };
 const posts = [
   { key: '1', handle: 'alice', text: 'hello', images: [], context: '' },
   { key: '2', handle: 'bob', text: 'hi', images: [], context: '' },

@@ -2,7 +2,13 @@ import { useEffect, useState } from 'preact/hooks';
 import { Schema } from 'effect';
 import { request, type Stats } from '../common/messages';
 import { threadId } from '../common/post';
-import { providerOrigins, Settings, siteOrigins, type SettingsPatch } from '../common/settings';
+import {
+  apiOrigins,
+  Settings,
+  siteOrigins,
+  usesClassifier,
+  type SettingsPatch,
+} from '../common/settings';
 import { extensionsPage } from '../common/build';
 import { GeneralPanel, type GeneralTab } from './GeneralPanel';
 import { ListSheet, type ListKey } from './ListSheet';
@@ -64,7 +70,7 @@ export function App() {
   const [form, setForm] = useState<Form | null>(null);
   const [section, setSection] = useState<Section>('x');
   const [xTab, setXTab] = useState<XTab>('filtering');
-  const [generalTab, setGeneralTab] = useState<GeneralTab>('connection');
+  const [generalTab, setGeneralTab] = useState<GeneralTab>('ai');
   const [youtubeTab, setYoutubeTab] = useState<YouTubeTab>('filtering');
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -129,16 +135,16 @@ export function App() {
     return () => chrome.storage.onChanged.removeListener(onChange);
   }, []);
 
-  const provider = form?.saved.provider;
-  const customBaseUrl = form?.saved.customBaseUrl;
+  // A string, so the effect below re-runs only when the set of origins changes.
+  const origins = form ? apiOrigins(form.saved).join(' ') : undefined;
   /** Chrome grants declared host permissions at install, so this finds nothing
    *  and the banner never appears. Firefox hands them out one origin at a time,
    *  and without them the content scripts never run and the provider is
    *  unreachable, which otherwise looks exactly like a broken extension. */
   useEffect(() => {
-    if (provider === undefined || customBaseUrl === undefined) return;
+    if (origins === undefined) return;
     let live = true;
-    const wanted = [...siteOrigins, ...providerOrigins({ provider, customBaseUrl })];
+    const wanted = [...siteOrigins, ...origins.split(' ').filter(Boolean)];
     void Promise.all(
       wanted.map(async (origin) =>
         (await chrome.permissions.contains({ origins: [origin] })) ? null : origin,
@@ -149,7 +155,7 @@ export function App() {
     return () => {
       live = false;
     };
-  }, [provider, customBaseUrl]);
+  }, [origins]);
 
   /** Asking must be the first thing the click does: Firefox rejects a
    *  permission request that is not still inside the user's gesture. */
@@ -229,9 +235,15 @@ export function App() {
         if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) {
           throw new Error('Use an HTTPS base URL without credentials, query or fragment.');
         }
-        // Called from the submit gesture, before any await (required by Chrome).
-        const granted = await chrome.permissions.request({ origins: [`${url.origin}/*`] });
-        if (!granted) throw new Error('Endpoint permission was not granted.');
+      }
+      // Every origin these settings will call: the chat endpoint, or the
+      // classifier's provider and whoever describes its images. Already-granted
+      // origins resolve without a prompt. Called from the submit gesture, before
+      // any await (required by Chrome).
+      const wanted = apiOrigins(next);
+      if (wanted.length) {
+        const granted = await chrome.permissions.request({ origins: [...wanted] });
+        if (!granted) throw new Error('Permission to reach the provider was not granted.');
       }
       // Only changed fields are sent; unrelated updates from a tab aren't overwritten.
       const patch: SettingsPatch = Object.fromEntries(
@@ -275,7 +287,9 @@ export function App() {
       return enabled ? 'Filtering is on.' : 'Filtering is off. Nothing is hidden.';
     });
 
-  const connected = Boolean(saved.apiKeys[saved.provider] && saved.model);
+  const connected = usesClassifier(saved)
+    ? Boolean(saved.apiKeys[saved.classifierProvider])
+    : Boolean(saved.apiKeys[saved.provider] && saved.model);
   const footer = dirty || busy || Boolean(message);
 
   return (
@@ -294,16 +308,18 @@ export function App() {
             ? ([
                 ['filtering', 'Filtering'],
                 ['rules', 'Rules'],
+                ['appearance', 'Appearance'],
+                ['advanced', 'Advanced'],
                 ['activity', 'Activity'],
-                ['misc', 'Misc'],
               ] as const)
             : section === 'youtube'
               ? ([
                   ['filtering', 'Filtering'],
-                  ['misc', 'Misc'],
+                  ['appearance', 'Appearance'],
                 ] as const)
               : ([
-                  ['connection', 'Connection'],
+                  ['ai', 'AI'],
+                  ['advanced', 'Advanced'],
                   ['appearance', 'Appearance'],
                   ['about', 'About'],
                 ] as const)
@@ -362,7 +378,7 @@ export function App() {
               onApply={() => void save()}
               onOpenConnection={() => {
                 setSection('general');
-                setGeneralTab('connection');
+                setGeneralTab('ai');
               }}
               onOpenList={(list) => setOverlay({ kind: 'list', list })}
               onSavePreset={(name) =>
@@ -408,7 +424,7 @@ export function App() {
               busy={busy}
               bytes={bytes}
               onBrowse={(view) => setOverlay({ kind: 'model', view })}
-              onTest={() => void run(() => request({ type: 'TEST_CONNECTION' }))}
+              onTest={(mode) => void run(() => request({ type: 'TEST_CONNECTION', mode }))}
               onClearCache={() =>
                 void run(async () => {
                   await request({ type: 'CLEAR_CACHE' });

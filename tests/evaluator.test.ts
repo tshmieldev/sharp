@@ -90,3 +90,39 @@ it('distinguishes image-only posts and edits but ignores mounted reply context',
   expect(await key(post)).not.toBe(await key({ ...post, text: 'edited' }));
   expect(await key(post)).toBe(await key({ ...post, context: 'different mounted parent' }));
 });
+
+it('keeps a classifier score in the cache, and a trace only for the decision it came with', async () => {
+  const trace = {
+    source: 'classifier' as const,
+    model: 'm',
+    at: 1,
+    images: [],
+    request: { secret: 'post text' },
+  };
+  const classify = vi.fn(() =>
+    Effect.succeed({
+      verdicts: [{ key: post.key, hide: true, reason: 'Matches your filter', score: 0.91, trace }],
+      tokens: 7,
+    }),
+  );
+  const debug = { ...defaults, debug: true };
+  const evaluator = createEvaluator(classify);
+  const [fresh] = await Effect.runPromise(evaluator.evaluate(debug, [post]));
+  expect(fresh).toMatchObject({ hide: true, score: 0.91, trace: { source: 'classifier' } });
+
+  // Remembered: the score survives, the trace does not; it says where it came from.
+  const [cached] = await Effect.runPromise(createEvaluator(classify).evaluate(debug, [post]));
+  expect(classify).toHaveBeenCalledTimes(1);
+  expect(cached).toMatchObject({ hide: true, score: 0.91, trace: { source: 'cache' } });
+  expect(JSON.stringify(cached)).not.toContain('post text');
+
+  // Without debug mode there is no trace at all.
+  const [plain] = await Effect.runPromise(createEvaluator(classify).evaluate(defaults, [post]));
+  expect(plain).toEqual({ key: post.key, hide: true, reason: 'Matches your filter', score: 0.91 });
+
+  // The cached score is read against the hide line as it stands now, for free.
+  const strict = { ...defaults, hideFrom: 0.95 };
+  const [kept] = await Effect.runPromise(createEvaluator(classify).evaluate(strict, [post]));
+  expect(kept).toEqual({ key: post.key, hide: false, reason: '', score: 0.91 });
+  expect(classify).toHaveBeenCalledTimes(1);
+});

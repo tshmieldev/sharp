@@ -3,7 +3,12 @@ import { isFirefox } from '../common/build';
 import { errorMessage, OperationError } from '../common/errors';
 import { Request } from '../common/messages';
 import { threadId } from '../common/post';
-import { decisionScope, publicSettings } from '../common/settings';
+import {
+  classifierProviders,
+  decisionScope,
+  publicSettings,
+  usesClassifier,
+} from '../common/settings';
 import { createEvaluator } from './evaluator';
 import { classify, listEndpoints, listModels } from './providers';
 import {
@@ -75,7 +80,8 @@ function handle(message: Request) {
       case 'LIST_ENDPOINTS':
         return yield* listEndpoints(yield* getSettings, message.model);
       case 'TEST_CONNECTION': {
-        const settings = yield* getSettings;
+        const saved = yield* getSettings;
+        const settings = { ...saved, decisionMode: message.mode };
         yield* classify(settings, [
           {
             key: 'probe',
@@ -85,8 +91,11 @@ function handle(message: Request) {
             context: '',
           },
         ]);
-        yield* setStatus('');
-        return `Connected to ${settings.model}`;
+        // Only the connection in use has anything to do with the standing error.
+        if (saved.decisionMode === message.mode) yield* setStatus('');
+        return usesClassifier(settings)
+          ? `Connected to the classifier through ${classifierProviders[settings.classifierProvider].label}`
+          : `Connected to ${settings.model}`;
       }
       case 'GET_STATS':
         return yield* getStats;

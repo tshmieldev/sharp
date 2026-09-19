@@ -1,7 +1,7 @@
 import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import type { PublicSettings } from '../common/settings';
-import { Check, Mark, Query } from './icons';
+import { Check, Inspect, Mark, Query } from './icons';
 import { articleSelector } from './extract';
 
 export type HiddenStyle = PublicSettings['hideStyle'] | 'remove';
@@ -15,17 +15,27 @@ export type Recourse = {
 export type PostState =
   | { kind: 'show' }
   | { kind: 'pending' }
+  /** Debug mode only: a post the model decided to keep, marked so it can be inspected. */
+  | { kind: 'kept'; score?: number; threshold?: number; hideFrom?: number; inspect: () => void }
   | {
       kind: 'hidden';
       name: string;
       reason: string;
       unsure: boolean;
+      /** A classifier's probability that the post should be hidden. */
+      score?: number;
+      /** The reader's line between a sure verdict and a close call. */
+      threshold?: number;
+      /** The reader's line between a keep and a hide. */
+      hideFrom?: number;
       style: HiddenStyle;
       showAuthor: boolean;
       /** Reported to X over the wire: in flight, or acknowledged. */
       told?: 'sending' | 'told';
+      /** Debug mode: open this post's decision in the inspector. */
+      inspect?: () => void;
     }
-  | { kind: 'revealed'; recourse: Recourse };
+  | { kind: 'revealed'; recourse: Recourse; inspect?: () => void };
 
 /** A post's cell from the moment Sharp tells X "not interested" until X has
  *  recycled it. X answers by drawing a "Thanks, we'll show fewer posts like
@@ -35,6 +45,9 @@ export type FeedbackState = {
   style: HiddenStyle;
   name: string;
   reason: string;
+  score?: number;
+  threshold?: number;
+  hideFrom?: number;
   showAuthor: boolean;
   /** X has answered; its Undo is available. */
   acked: boolean;
@@ -46,10 +59,76 @@ type Mounted = { root: HTMLDivElement; signature: string };
 const mounted = new WeakMap<HTMLElement, Mounted>();
 const signatureOf = (state: PostState) =>
   state.kind === 'hidden'
-    ? `hidden:${state.style}:${state.showAuthor ? state.name : ''}:${state.reason}:${state.unsure}:${state.told ?? ''}`
+    ? `hidden:${state.style}:${state.showAuthor ? state.name : ''}:${state.reason}:${state.unsure}:${state.score ?? ''}:${state.threshold ?? ''}:${state.hideFrom ?? ''}:${state.told ?? ''}:${state.inspect ? 'i' : ''}`
     : state.kind === 'revealed'
-      ? `revealed:${state.recourse.handle}`
-      : state.kind;
+      ? `revealed:${state.recourse.handle}:${state.inspect ? 'i' : ''}`
+      : state.kind === 'kept'
+        ? `kept:${state.score ?? ''}:${state.threshold ?? ''}:${state.hideFrom ?? ''}`
+        : state.kind;
+
+export const percent = (value: number) => `${Math.round(value * 100)}%`;
+
+/** How sure Sharp is of what it did with the post, which is the only reading
+ *  of the number where high is plainly good: a hide is as sure as its score, a
+ *  keep as sure as the rest. "93% sure", never a bare figure or a "match". */
+export function sureness(score: number, hideFrom = 0.5) {
+  return score >= hideFrom ? score : 1 - score;
+}
+export function sureText(score: number, unsure: boolean, hideFrom = 0.5) {
+  return `${unsure ? 'only ' : ''}${percent(sureness(score, hideFrom))} sure`;
+}
+
+/** The same, as a sentence, for a hover or a screen reader. */
+export function explainScore(score: number, threshold = 0.8, hideFrom = 0.5) {
+  if (score < hideFrom) {
+    return `${percent(1 - score)} sure this post is fine. It scored ${percent(score)}, under your ${percent(hideFrom)} hide line, so it stays.`;
+  }
+  const sure = `${percent(score)} sure this post matches your filter`;
+  if (score < threshold) {
+    return `Only ${sure}. That is under your ${percent(threshold)} line, so it is a close call: hidden, but not reported to X.`;
+  }
+  return `${sure}, so it is hidden.`;
+}
+
+export function Confidence({
+  score,
+  threshold,
+  hideFrom,
+  unsure,
+}: {
+  score: number;
+  threshold?: number | undefined;
+  hideFrom?: number | undefined;
+  unsure: boolean;
+}) {
+  return (
+    <span
+      class="aitf-confidence"
+      data-unsure={unsure ? 'true' : undefined}
+      title={explainScore(score, threshold, hideFrom)}
+    >
+      {sureText(score, unsure, hideFrom)}
+    </span>
+  );
+}
+
+function InspectButton({ onInspect }: { onInspect: () => void }) {
+  return (
+    <button
+      type="button"
+      class="aitf-inspect"
+      aria-label="Inspect this decision"
+      title="Inspect this decision"
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onInspect();
+      }}
+    >
+      <Inspect />
+    </button>
+  );
+}
 
 /** X puts its face on text elements, not on their containers, and the document
  *  default is a serif. Sample real text and refuse that fallback. */
@@ -69,6 +148,7 @@ function unmount(article: HTMLElement) {
   }
   delete article.dataset.aitfHidden;
   delete article.dataset.aitfRevealed;
+  delete article.dataset.aitfKept;
   article.closest<HTMLElement>(cellSelector)?.removeAttribute('data-aitf-unsure');
 }
 
@@ -198,6 +278,7 @@ export function apply(article: HTMLElement, state: PostState, onReveal: () => vo
   if (family) root.style.fontFamily = family;
   article.prepend(root);
   if (state.kind === 'revealed') article.dataset.aitfRevealed = '';
+  else if (state.kind === 'kept') article.dataset.aitfKept = '';
   else article.dataset.aitfHidden = state.kind === 'pending' ? 'pending' : state.style;
   // The tint belongs to the cell: the article sits inside X's padding.
   if (state.kind === 'hidden' && state.unsure)
@@ -222,8 +303,38 @@ export function apply(article: HTMLElement, state: PostState, onReveal: () => vo
     return;
   }
 
+  if (state.kind === 'kept') {
+    render(
+      <div class="aitf-kept">
+        <span class="aitf-kept-text">
+          Kept
+          {state.score !== undefined && (
+            <>
+              <span class="aitf-sep" aria-hidden="true" />
+              <Confidence
+                score={state.score}
+                threshold={state.threshold}
+                hideFrom={state.hideFrom}
+                unsure={false}
+              />
+            </>
+          )}
+        </span>
+        <InspectButton onInspect={state.inspect} />
+      </div>,
+      root,
+    );
+    return;
+  }
+
   if (state.kind === 'revealed') {
-    render(<Recourse recourse={state.recourse} />, root);
+    render(
+      <div class="aitf-revealed-row">
+        <Recourse recourse={state.recourse} />
+        {state.inspect && <InspectButton onInspect={state.inspect} />}
+      </div>,
+      root,
+    );
     return;
   }
 
@@ -236,7 +347,21 @@ export function apply(article: HTMLElement, state: PostState, onReveal: () => vo
       <span class="aitf-banner-text">
         {state.showAuthor && <span class="aitf-name">{state.name}</span>}
         {state.showAuthor && <span class="aitf-sep" aria-hidden="true" />}
-        <span class="aitf-reason">{state.reason}</span>
+        {/* A score says it all; the words are only for verdicts without one. */}
+        {state.score === undefined ? (
+          <span class="aitf-reason">{state.reason}</span>
+        ) : (
+          <>
+            <span class="aitf-reason aitf-verdict-word">Hidden</span>
+            <span class="aitf-sep aitf-verdict-word" aria-hidden="true" />
+            <Confidence
+              score={state.score}
+              threshold={state.threshold}
+              hideFrom={state.hideFrom}
+              unsure={state.unsure}
+            />
+          </>
+        )}
       </span>
       {state.told && (
         <span class="aitf-told" role="status">
@@ -255,13 +380,14 @@ export function apply(article: HTMLElement, state: PostState, onReveal: () => vo
       >
         Show
       </button>
+      {state.inspect && <InspectButton onInspect={state.inspect} />}
     </div>,
     root,
   );
 }
 
 export function applyFeedback(cell: HTMLElement, state: FeedbackState) {
-  const signature = `feedback:${state.style}:${state.showAuthor ? state.name : ''}:${state.reason}:${state.acked}`;
+  const signature = `feedback:${state.style}:${state.showAuthor ? state.name : ''}:${state.reason}:${state.score ?? ''}:${state.threshold ?? ''}:${state.hideFrom ?? ''}:${state.acked}`;
   const previous = mounted.get(cell);
   if (
     previous?.root.isConnected &&
@@ -291,7 +417,20 @@ function renderFeedback(root: HTMLElement, state: FeedbackState) {
       <span class="aitf-banner-text">
         {state.showAuthor && <span class="aitf-name">{state.name}</span>}
         {state.showAuthor && <span class="aitf-sep" aria-hidden="true" />}
-        <span class="aitf-reason">{state.reason}</span>
+        {state.score === undefined ? (
+          <span class="aitf-reason">{state.reason}</span>
+        ) : (
+          <>
+            <span class="aitf-reason aitf-verdict-word">Hidden</span>
+            <span class="aitf-sep aitf-verdict-word" aria-hidden="true" />
+            <Confidence
+              score={state.score}
+              threshold={state.threshold}
+              hideFrom={state.hideFrom}
+              unsure={false}
+            />
+          </>
+        )}
       </span>
       <span class="aitf-told" role="status">
         {state.acked ? <Check /> : <span class="aitf-dot" aria-hidden="true" />}

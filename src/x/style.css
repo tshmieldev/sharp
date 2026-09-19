@@ -34,7 +34,8 @@ html[data-aitf-auto] #layers [data-testid='Dropdown'] * {
   display: none !important;
 }
 [data-aitf-hidden],
-article[data-aitf-revealed] {
+article[data-aitf-revealed],
+article[data-aitf-kept] {
   flex-wrap: wrap !important;
 }
 .aitf-slot {
@@ -189,6 +190,7 @@ html[data-aitf-motion='reduced'] .aitf-glow i {
 }
 
 .aitf-banner {
+  container-type: inline-size;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -224,7 +226,9 @@ html[data-aitf-motion='reduced'] .aitf-glow i {
   opacity: 0.35;
 }
 .aitf-name {
-  flex: none;
+  /* The name gives way first: the verdict beside it is the point of the line. */
+  flex: 0 1 auto;
+  min-width: 0;
   max-width: 45%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -571,4 +575,448 @@ html[data-aitf-grey-content] [data-testid='card.layoutLarge.media'],
 html[data-aitf-grey-content] [data-testid='card.layoutSmall.media'],
 html[data-aitf-grey-content] [data-testid='swipe-to-dismiss'] {
   filter: grayscale(1) !important;
+}
+
+/* How sure Sharp is of the hide: "93% sure", in the reason's own quiet ink and
+   weight, with tabular numerals so a column of banners lines up. A close call
+   says "only 62% sure" in the accent, matching its tinted cell. */
+.aitf-confidence {
+  flex: none;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.55;
+}
+.aitf-confidence[data-unsure] {
+  color: var(--aitf-accent);
+  opacity: 1;
+}
+/* On a narrow timeline the word goes and "93% sure" carries the line alone,
+   rather than squeezing the name or itself to a sliver. */
+.aitf-verdict-word {
+  flex: none;
+}
+@container (max-width: 430px) {
+  .aitf-verdict-word {
+    display: none;
+  }
+}
+
+/* Debug mode. A quiet bracket on every model decision opens the inspector. */
+.aitf-inspect {
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: 30px;
+  block-size: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 99px;
+  background: transparent;
+  color: inherit;
+  opacity: 0.55;
+  cursor: pointer;
+  transition:
+    opacity 140ms ease-out,
+    background-color 140ms ease-out,
+    color 140ms ease-out;
+}
+.aitf-inspect svg {
+  width: 17px;
+  height: 17px;
+}
+.aitf-inspect:hover {
+  opacity: 1;
+  color: var(--aitf-accent);
+  background: color-mix(in srgb, var(--aitf-accent) 13%, transparent);
+}
+.aitf-inspect:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--aitf-accent);
+  outline-offset: 1px;
+}
+
+/* A kept post, in debug mode only: one slim line above it, same inset as a
+   banner, saying what the model thought. */
+.aitf-kept {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 0 16px;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.aitf-kept-text {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  gap: 7px;
+  font-weight: 500;
+  opacity: 0.6;
+}
+.aitf-revealed-row {
+  display: flex;
+  align-items: flex-start;
+}
+.aitf-revealed-row > .aitf-recourse {
+  flex: 1;
+  min-width: 0;
+}
+.aitf-revealed-row > .aitf-inspect {
+  margin: 6px 10px 0 0;
+}
+
+/* The inspector: a sheet docked beside the timeline, on X's own ground and
+   ink, so it belongs to whichever theme the reader chose. Non-modal: nothing
+   behind it dims or stops. */
+.aitf-inspector-host {
+  position: fixed;
+  z-index: 2147483000;
+  inset-block: 12px;
+  inset-inline-end: 12px;
+  display: flex;
+  flex-direction: column;
+  inline-size: min(420px, calc(100vw - 24px));
+  pointer-events: none;
+  color: var(--aitf-ink);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.aitf-inspector {
+  display: flex;
+  flex-direction: column;
+  max-block-size: 100%;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--aitf-ink) 14%, transparent);
+  border-radius: 18px;
+  background: var(--aitf-ground);
+  box-shadow:
+    0 22px 48px -18px rgb(0 0 0 / 0.5),
+    0 6px 16px -8px rgb(0 0 0 / 0.3);
+  pointer-events: auto;
+  animation: aitf-sheet-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes aitf-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+    filter: blur(2px);
+  }
+}
+html[data-aitf-motion='reduced'] .aitf-inspector {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-aitf-motion='full']) .aitf-inspector {
+    animation: none;
+  }
+}
+/* On a phone it rises from the bottom instead, and leaves the top of the
+   timeline in view. */
+@media (max-width: 640px) {
+  .aitf-inspector-host {
+    inset-block-start: auto;
+    inset-inline: 8px;
+    inset-block-end: 8px;
+    inline-size: auto;
+    max-block-size: 78vh;
+  }
+  @keyframes aitf-sheet-in {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+  }
+}
+.aitf-inspector ::selection {
+  background: color-mix(in srgb, var(--aitf-accent) 35%, transparent);
+}
+.aitf-inspector :focus-visible {
+  outline: 2px solid var(--aitf-accent);
+  outline-offset: 2px;
+}
+.aitf-inspector-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 14px 14px 18px;
+  border-block-end: 1px solid color-mix(in srgb, var(--aitf-ink) 10%, transparent);
+}
+.aitf-verdict {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.aitf-verdict strong {
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0.7;
+}
+.aitf-verdict-score {
+  display: grid;
+  gap: 4px;
+}
+.aitf-verdict-score p {
+  margin: 0;
+}
+.aitf-verdict-likely {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.aitf-verdict-likely span {
+  font-size: 17px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  opacity: 0.5;
+}
+.aitf-close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: 32px;
+  block-size: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 99px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.7;
+  transition:
+    opacity 140ms ease-out,
+    background-color 140ms ease-out;
+}
+.aitf-close:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--aitf-ink) 9%, transparent);
+}
+.aitf-close svg {
+  width: 18px;
+  height: 18px;
+}
+.aitf-inspector-body {
+  overflow: auto;
+  padding: 16px 18px 20px;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--aitf-ink) 22%, transparent) transparent;
+}
+.aitf-inspector h3 {
+  margin: 22px 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.aitf-quiet {
+  margin: 0;
+  opacity: 0.6;
+}
+.aitf-post-excerpt {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 6px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--aitf-ink) 5%, transparent);
+}
+.aitf-post-excerpt > span {
+  overflow: hidden;
+  opacity: 0.55;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aitf-post-excerpt p {
+  display: -webkit-box;
+  grid-column: 1 / -1;
+  margin: 4px 0 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  white-space: pre-wrap;
+}
+.aitf-inspector code,
+.aitf-payload pre {
+  font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+}
+.aitf-inspector code {
+  font-size: 12px;
+}
+.aitf-facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+  margin: 16px 0 0;
+}
+.aitf-facts div {
+  min-width: 0;
+}
+.aitf-facts dt {
+  margin-block-end: 2px;
+  font-size: 12px;
+  opacity: 0.55;
+}
+.aitf-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.aitf-waterfall {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.aitf-waterfall li {
+  display: grid;
+  grid-template-columns: 96px 1fr 62px;
+  align-items: center;
+  gap: 10px;
+  min-block-size: 22px;
+}
+.aitf-lane {
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.aitf-lane em {
+  margin-inline-start: 6px;
+  font-size: 11.5px;
+  font-style: normal;
+  opacity: 0.55;
+}
+.aitf-track {
+  position: relative;
+  block-size: 8px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--aitf-ink) 7%, transparent);
+}
+.aitf-track i {
+  position: absolute;
+  inset-block: 0;
+  border-radius: 99px;
+}
+.aitf-track i[data-kind='image'] {
+  background: color-mix(in srgb, var(--aitf-ink) 45%, transparent);
+}
+.aitf-track i[data-kind='decision'] {
+  background: var(--aitf-accent);
+}
+.aitf-ms {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+  opacity: 0.7;
+}
+.aitf-waterfall .aitf-total {
+  margin-block-start: 2px;
+  padding-block-start: 8px;
+  border-block-start: 1px solid color-mix(in srgb, var(--aitf-ink) 10%, transparent);
+  font-weight: 600;
+}
+.aitf-waterfall .aitf-total .aitf-track {
+  background: none;
+}
+.aitf-waterfall .aitf-total .aitf-ms {
+  opacity: 1;
+}
+.aitf-images {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.aitf-images li {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  gap: 12px;
+}
+.aitf-images img {
+  display: block;
+  inline-size: 76px;
+  block-size: 76px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--aitf-ink) 8%, transparent);
+  object-fit: cover;
+}
+.aitf-image-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0 0 4px;
+  font-size: 12px;
+  opacity: 0.6;
+}
+.aitf-image-text {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.aitf-payload {
+  margin-block-start: 18px;
+  border-block-start: 1px solid color-mix(in srgb, var(--aitf-ink) 10%, transparent);
+}
+.aitf-payload summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-block: 12px 10px;
+  font-weight: 700;
+  list-style: none;
+  cursor: pointer;
+}
+.aitf-payload summary::-webkit-details-marker {
+  display: none;
+}
+.aitf-payload summary > span::before {
+  content: '';
+  display: inline-block;
+  inline-size: 6px;
+  block-size: 6px;
+  margin-inline-end: 9px;
+  border-block-end: 1.5px solid currentColor;
+  border-inline-end: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 160ms ease-out;
+  opacity: 0.6;
+}
+.aitf-payload:not([open]) summary > span::before {
+  transform: rotate(-45deg);
+}
+.aitf-payload pre {
+  max-block-size: 320px;
+  margin: 0;
+  padding: 12px 14px;
+  overflow: auto;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--aitf-ink) 5%, transparent);
+  font-size: 11.5px;
+  line-height: 1.55;
+  tab-size: 2;
+  scrollbar-width: thin;
+}
+.aitf-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 11px 4px 9px;
+  border: 1px solid color-mix(in srgb, var(--aitf-ink) 20%, transparent);
+  border-radius: 99px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 140ms ease-out;
+}
+.aitf-copy:hover {
+  background: color-mix(in srgb, var(--aitf-ink) 7%, transparent);
+}
+.aitf-copy svg {
+  width: 14px;
+  height: 14px;
 }

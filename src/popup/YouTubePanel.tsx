@@ -6,10 +6,10 @@ const thumbnailOptions = [
   { value: 'hidden', label: 'Hidden' },
 ] as const;
 
-export type YouTubeTab = 'filtering' | 'misc';
+export type YouTubeTab = 'filtering' | 'appearance';
 
 export function YouTubePanel({ settings, update, tab }: SettingsEditor & { tab: YouTubeTab }) {
-  if (tab === 'misc') {
+  if (tab === 'appearance') {
     return (
       <div class="panel">
         <section class="group">

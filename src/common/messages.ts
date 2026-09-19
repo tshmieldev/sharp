@@ -80,7 +80,11 @@ export const Request = Schema.Union(
     type: Schema.Literal('LIST_ENDPOINTS'),
     model: Schema.String.pipe(Schema.maxLength(200)),
   }),
-  Schema.Struct({ type: Schema.Literal('TEST_CONNECTION') }),
+  // Either connection can be tested, whichever one X is using.
+  Schema.Struct({
+    type: Schema.Literal('TEST_CONNECTION'),
+    mode: Schema.Literal('classifier', 'llm'),
+  }),
   Schema.Struct({ type: Schema.Literal('GET_STATS') }),
   Schema.Struct({ type: Schema.Literal('GET_STATUS') }),
   Schema.Struct({ type: Schema.Literal('RESET_STATS') }),

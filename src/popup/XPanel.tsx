@@ -1,12 +1,21 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { Stats } from '../common/messages';
-import { MAX_CORRECTIONS } from '../common/settings';
+import {
+  closeCallLine,
+  DEFAULT_VISION_MODEL,
+  MAX_CORRECTIONS,
+  spendPreset,
+  spendPresets,
+  type SpendPreset,
+  usesClassifier,
+} from '../common/settings';
 import { Alert, ChevronRight, Close } from './icons';
 import * as fmt from './format';
 import { lists, type ListKey } from './ListSheet';
-import { RangeField, ToggleRow, type SettingsEditor } from './ui';
+import { Field, NumberField, RangeField, Segmented, ToggleRow, type SettingsEditor } from './ui';
+import { ConfidenceZones, ImageRange, linesNote, rangeNote } from './Zones';
 
-export type XTab = 'filtering' | 'rules' | 'activity' | 'misc';
+export type XTab = 'filtering' | 'rules' | 'appearance' | 'advanced' | 'activity';
 
 // A hidden post is one the reader did not have to read past. This is roughly
 // the time a post holds the eye on the way by, and the number is labelled as
@@ -91,9 +100,35 @@ export function XPanel({
     onSavePreset(name);
   };
 
-  if (tab === 'misc') {
+  if (tab === 'appearance') {
     return (
       <div class="panel">
+        <section class="group">
+          <h2>Hidden posts</h2>
+          <Segmented
+            label="Hidden post appearance"
+            value={settings.hideStyle}
+            onChange={(value) => update('hideStyle', value)}
+            options={[
+              { value: 'collapse', label: 'Collapse' },
+              { value: 'blur', label: 'Blur' },
+            ]}
+          />
+          <p class="note tight">Either way a banner stays and one click reveals the post.</p>
+          <ToggleRow
+            label="Show who wrote it"
+            hint="The author's name on the banner."
+            checked={settings.showAuthor}
+            onChange={(value) => update('showAuthor', value)}
+          />
+          <ToggleRow
+            label="Hide completely when the model is sure"
+            hint="Blocked posts not visible at all if the model is sure"
+            checked={settings.hideFully}
+            onChange={(value) => update('hideFully', value)}
+          />
+        </section>
+
         <section class="group">
           <h2>Greyscale</h2>
           <ToggleRow
@@ -106,6 +141,205 @@ export function XPanel({
             checked={settings.greyscaleContent}
             onChange={(value) => update('greyscaleContent', value)}
           />
+        </section>
+      </div>
+    );
+  }
+
+  if (tab === 'advanced') {
+    const classifier = usesClassifier(settings);
+    const line = closeCallLine(settings);
+    const hidePct = Math.round(settings.hideFrom * 100);
+    const linePct = Math.round(line * 100);
+    return (
+      <div class="panel">
+        <section class="group">
+          <h2>Mode</h2>
+          <Segmented
+            label="Who judges posts on X"
+            value={classifier ? 'classifier' : 'llm'}
+            onChange={(value) => update('decisionMode', value)}
+            options={[
+              { value: 'classifier', label: 'Classifier' },
+              { value: 'llm', label: 'Language model' },
+            ]}
+          />
+          <p class="note tight">
+            {classifier
+              ? 'A decision model scores every post: how sure it is the post matches your filter. Fast and nearly free.'
+              : 'A chat model of your choice reads posts in batches and gives a short reason for each hide. Slower and costs more.'}{' '}
+            Keys for both live under General › AI.
+          </p>
+        </section>
+
+        {classifier ? (
+          <section class="group">
+            <h2>Speed</h2>
+            <RangeField
+              label="Posts at once"
+              min={1}
+              max={64}
+              step={1}
+              value={settings.classifierConcurrency}
+              display={String(settings.classifierConcurrency)}
+              onChange={(next) => update('classifierConcurrency', next)}
+            />
+            <p class="note tight">
+              Each post is its own request, so this is how many run at once, across every tab. More
+              settles the timeline faster; the cost per post is the same either way.
+            </p>
+          </section>
+        ) : (
+          <section class="group">
+            <h2>Spending</h2>
+            <Segmented
+              label="Spending preset"
+              value={spendPreset(settings)}
+              onChange={(value) => {
+                if (value === 'custom') return;
+                const preset = spendPresets[value];
+                update('batchSize', preset.batchSize);
+                update('concurrency', preset.concurrency);
+              }}
+              options={[
+                ...(
+                  Object.entries(spendPresets) as [
+                    SpendPreset,
+                    (typeof spendPresets)[keyof typeof spendPresets],
+                  ][]
+                ).map(([value, preset]) => ({ value, label: `${preset.cost} ${preset.label}` })),
+                { value: 'custom' as SpendPreset, label: 'Custom' },
+              ]}
+            />
+            <div class="pair">
+              <RangeField
+                label="Posts per request"
+                min={1}
+                max={30}
+                step={1}
+                value={settings.batchSize}
+                display={String(settings.batchSize)}
+                onChange={(next) => update('batchSize', next)}
+              />
+              <RangeField
+                label="Requests at once"
+                min={1}
+                max={12}
+                step={1}
+                value={settings.concurrency}
+                display={String(settings.concurrency)}
+                onChange={(next) => update('concurrency', next)}
+              />
+            </div>
+            <p class="note tight">
+              {spendPreset(settings) === 'low'
+                ? 'Fewest requests, so the least paid for instructions. Posts settle a little later.'
+                : spendPreset(settings) === 'high'
+                  ? 'Small batches in parallel settle the timeline fastest. Every request repeats the instructions, so this costs the most.'
+                  : spendPreset(settings) === 'medium'
+                    ? 'Batches of a dozen, three in flight. A sensible middle.'
+                    : 'Each request repeats the instructions, so bigger batches cost less per post. More requests at once settle the timeline sooner.'}
+            </p>
+          </section>
+        )}
+
+        {classifier ? (
+          <section class="group">
+            <h2>Confidence</h2>
+            <ConfidenceZones hide={settings.hideFrom} line={line} />
+            <RangeField
+              label="Hide from"
+              min={0}
+              max={100}
+              step={1}
+              value={hidePct}
+              display={`${hidePct}%`}
+              onChange={(next) => update('hideFrom', next / 100)}
+            />
+            <RangeField
+              label="Close-call margin"
+              min={0}
+              max={Math.max(1, 100 - hidePct)}
+              step={1}
+              value={linePct - hidePct}
+              display={linePct === hidePct ? 'None' : `${linePct - hidePct}%`}
+              onChange={(next) => update('closeCallMargin', next / 100)}
+            />
+            <p class="note tight">{linesNote(settings.hideFrom, line)}</p>
+          </section>
+        ) : (
+          <section class="group">
+            <h2>Confidence</h2>
+            <p class="note">
+              The hide and close-call lines belong to the classifier. A language model decides now,
+              and makes that call itself.
+            </p>
+          </section>
+        )}
+
+        <section class="group">
+          <h2>Images</h2>
+          {classifier && (
+            <Field
+              label="Image model"
+              hint="Describes each image and transcribes its text, since the classifier cannot see. Cached per image."
+            >
+              <input
+                value={settings.visionModel}
+                spellcheck={false}
+                placeholder={DEFAULT_VISION_MODEL}
+                onInput={(event) =>
+                  update('visionModel', event.currentTarget.value.trim() || DEFAULT_VISION_MODEL)
+                }
+              />
+            </Field>
+          )}
+          {classifier && (
+            <>
+              <ImageRange
+                hide={settings.hideFrom}
+                line={line}
+                from={settings.imageCheckFrom}
+                below={settings.imageCheckBelow}
+                disabled={!settings.analyzeImages}
+                onChange={(from, below) => {
+                  update('imageCheckFrom', from);
+                  update('imageCheckBelow', below);
+                }}
+              />
+              <p class="note tight">
+                {settings.analyzeImages
+                  ? rangeNote(settings.imageCheckFrom, settings.imageCheckBelow)
+                  : 'Sending photos is off, so no images are described. Turn it on under Filtering.'}
+              </p>
+            </>
+          )}
+          <NumberField
+            label="Max images per post"
+            min={1}
+            max={4}
+            value={settings.maxImagesPerPost}
+            onChange={(value) => update('maxImagesPerPost', value)}
+          />
+          <p class="note tight">Only used while sending photos is on, under Filtering.</p>
+        </section>
+
+        <section class="group">
+          <h2>Lookahead</h2>
+          <RangeField
+            label="Judge posts within"
+            min={0}
+            max={500}
+            step={25}
+            value={settings.lookahead}
+            display={`${settings.lookahead}vh`}
+            onChange={(next) => update('lookahead', next)}
+          />
+          <p class="note tight">
+            {settings.lookahead === 0
+              ? 'Only posts on screen are judged, so you will watch them resolve.'
+              : `Posts within ${settings.lookahead / 100} screens of the viewport are judged early, so most have settled before you reach them. Higher costs more requests.`}
+          </p>
         </section>
       </div>
     );
@@ -249,8 +483,7 @@ export function XPanel({
         <button type="button" class="callout" onClick={onOpenConnection}>
           <Alert />
           <span>
-            <b>No model connected.</b> Sharp reads nothing and hides nothing until you add a
-            provider key.
+            <b>No AI connected.</b> Sharp reads nothing and hides nothing until you add a key.
           </span>
           <span class="go">Set up →</span>
         </button>
@@ -403,44 +636,14 @@ export function XPanel({
       )}
 
       <section class="group">
-        <h2>Lookahead</h2>
-        <RangeField
-          label="Judge posts within"
-          min={0}
-          max={500}
-          step={25}
-          value={settings.lookahead}
-          display={`${settings.lookahead}vh`}
-          onChange={(next) => update('lookahead', next)}
-        />
-        <p class="note tight">
-          {settings.lookahead === 0
-            ? 'Only posts on screen are judged, so you will watch them resolve.'
-            : `Posts within ${settings.lookahead / 100} screens of the viewport are judged early, so most have settled before you reach them. Higher costs more requests.`}
-        </p>
-      </section>
-
-      <section class="group">
-        <h2>Hidden posts</h2>
-        <ToggleRow
-          label="Show who wrote it"
-          hint="The author's name on the banner, next to the reason."
-          checked={settings.showAuthor}
-          onChange={(value) => update('showAuthor', value)}
-        />
-        <ToggleRow
-          label="Hide completely when the model is sure"
-          hint="Blocked posts not visible at all if the model is sure"
-          checked={settings.hideFully}
-          onChange={(value) => update('hideFully', value)}
-        />
-      </section>
-
-      <section class="group">
         <h2>Images</h2>
         <ToggleRow
           label="Send photos and video thumbnails"
-          hint="Needs a vision-capable model and costs more per post."
+          hint={
+            usesClassifier(settings)
+              ? 'Images are described in words for the classifier. Which posts, under Advanced.'
+              : 'Needs a vision-capable model and costs more per post.'
+          }
           checked={settings.analyzeImages}
           onChange={(value) => update('analyzeImages', value)}
         />

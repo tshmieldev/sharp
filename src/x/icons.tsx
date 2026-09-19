@@ -76,3 +76,16 @@ export const Query = (props: JSX.SVGAttributes<SVGSVGElement>) => (
     <path d="M8.6 9.2a3.5 3.5 0 1 1 5.3 3c-1.3.8-1.9 1.5-1.9 2.9M12 18.6h.01" />
   </svg>
 );
+
+/** Debug mode: open the inspector. Angle brackets around a point: the payload. */
+export const Inspect = (props: JSX.SVGAttributes<SVGSVGElement>) =>
+  svg(props, <path d="M8.5 7 3.5 12l5 5M15.5 7l5 5-5 5M12 12h.01" />);
+
+export const Close = (props: JSX.SVGAttributes<SVGSVGElement>) =>
+  svg(props, <path d="M6 6l12 12M18 6 6 18" />);
+
+export const Copy = (props: JSX.SVGAttributes<SVGSVGElement>) =>
+  svg(
+    props,
+    <path d="M9 9.5c0-.8.7-1.5 1.5-1.5h7c.8 0 1.5.7 1.5 1.5v9c0 .8-.7 1.5-1.5 1.5h-7c-.8 0-1.5-.7-1.5-1.5v-9ZM15 8V5.5c0-.8-.7-1.5-1.5-1.5h-7C5.7 4 5 4.7 5 5.5v9c0 .8.7 1.5 1.5 1.5H9" />,
+  );
