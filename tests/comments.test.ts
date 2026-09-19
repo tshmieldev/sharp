@@ -28,6 +28,15 @@ it('keeps filtering the timeline, which has no thread, either way', () => {
   expect(createRules(settings())(post, '', '', false, '/home')).toBe('ai');
 });
 
+it('never filters what the reader saved themselves: bookmarks, at either address', () => {
+  const rule = createRules(settings({ blockedAuthors: ['alice'] }));
+  for (const path of ['/i/bookmarks', '/i/history', '/i/history/', '/i/bookmarks/all']) {
+    expect(rule(post, '', '', false, path)).toBe('show');
+  }
+  // A path that only starts the same way is still a timeline.
+  expect(createRules(settings())(post, '', '', false, '/i/historyx')).toBe('ai');
+});
+
 it('always shows the opened post and its ancestors', () => {
   const rule = createRules(settings({ filterComments: true }));
   expect(rule(post, '', ID, true, `/bob/status/${ID}`)).toBe('show');
