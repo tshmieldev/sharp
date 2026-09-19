@@ -22,7 +22,9 @@ export function createRules(settings: PublicSettings) {
       // has asked for them. `thread` is empty everywhere but a thread page.
       (Boolean(thread) && !settings.filterComments) ||
       settings.bypassedThreads.includes(thread) ||
-      /^\/(i\/bookmarks|bookmarks|notifications|messages|settings)(?:\/|$)/.test(path) ||
+      // Pages the reader filled themselves, or that are not a timeline at all:
+      // bookmarks (X serves them at /i/history too), notifications, messages.
+      /^\/(i\/bookmarks|i\/history|bookmarks|notifications|messages|settings)(?:\/|$)/.test(path) ||
       actors.some((actor) => allowed.has(actor))
     )
       return 'show';

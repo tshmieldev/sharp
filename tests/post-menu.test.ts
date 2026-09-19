@@ -116,8 +116,9 @@ it('adds author rules to the bottom sheet X shows at phone widths, above Cancel'
     handle: 'cifilter',
     rule: 'allow',
   });
-  // Nothing in the test answers Escape, so the sheet is closed from its backdrop.
-  expect(dismissed).toHaveBeenCalledOnce();
+  // Nothing in the test answers Escape, so the sheet is closed from its backdrop,
+  // a frame later. Wait for the frame rather than guessing how long one takes.
+  await vi.waitFor(() => expect(dismissed).toHaveBeenCalledOnce());
 });
 
 it('leaves other sheets alone, since only the post menu identifies a post', () => {

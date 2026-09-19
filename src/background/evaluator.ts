@@ -1,7 +1,7 @@
 import { Effect, Schema } from 'effect';
 import { attempt } from '../common/errors';
-import type { Post, Verdict } from '../common/post';
-import { decisionScope, type Settings } from '../common/settings';
+import type { Post, Trace, Verdict } from '../common/post';
+import { decisionScope, readVerdict, type Settings } from '../common/settings';
 import { classify } from './providers';
 import { bumpStats, readLocal, setStatus, writeLocal } from './storage';
 
@@ -9,6 +9,7 @@ const CacheEntry = Schema.Struct({
   hide: Schema.Boolean,
   reason: Schema.String,
   unsure: Schema.optional(Schema.Boolean),
+  score: Schema.optional(Schema.Number),
   at: Schema.Number,
 });
 const Cache = Schema.Record({ key: Schema.String, value: CacheEntry });
@@ -52,6 +53,7 @@ export function createEvaluator(runClassification = classify) {
         if (!cache[key] || now - cache[key].at > TTL) unique.set(key, post);
       });
       const updates: Record<string, typeof CacheEntry.Type> = {};
+      const traces = new Map<string, Trace>();
       if (unique.size) {
         // A paid request is never automatically retried here. The content controller
         // owns a bounded retry budget and leaves the timeline visible on failure.
@@ -67,11 +69,13 @@ export function createEvaluator(runClassification = classify) {
         const byId = new Map(result.verdicts.map((verdict) => [verdict.key, verdict]));
         for (const [key, post] of unique) {
           const verdict = byId.get(post.key);
+          if (verdict?.trace) traces.set(key, verdict.trace);
           if (verdict && !verdict.failed)
             updates[key] = {
               hide: verdict.hide,
               reason: verdict.reason,
               ...(verdict.unsure ? { unsure: true } : {}),
+              ...(verdict.score !== undefined ? { score: verdict.score } : {}),
               at: now,
             };
         }
@@ -96,13 +100,21 @@ export function createEvaluator(runClassification = classify) {
       return posts.map((post, index): Verdict => {
         const key = keys[index]!;
         const entry = updates[key] ?? cache[key];
+        // Debug mode: a fresh decision brings its trace; a cached one says so.
+        const trace: Trace | undefined = settings.debug
+          ? (traces.get(key) ??
+            (entry ? { source: 'cache', model: '', at: entry.at, images: [] } : undefined))
+          : undefined;
+        // A cached score is read against the hide line as it stands now.
         return entry && now - entry.at <= TTL
-          ? {
+          ? readVerdict(settings, {
               key: post.key,
               hide: entry.hide,
               reason: entry.reason,
               ...(entry.unsure ? { unsure: true } : {}),
-            }
+              ...(entry.score !== undefined ? { score: entry.score } : {}),
+              ...(trace ? { trace } : {}),
+            })
           : { key: post.key, hide: false, reason: '', failed: true };
       });
     }).pipe(Effect.timeout('32 seconds'));
