@@ -21,7 +21,7 @@ your machine:
   cost you a second request.
 
 You can clear all of it at any time by removing the extension, or clear the
-cached decisions alone from **General › Connection › Clear verdicts**.
+cached decisions alone from **General › Advanced › Clear verdicts**.
 
 ## What is sent to your AI provider
 
@@ -33,7 +33,15 @@ API key. That request contains:
 - The author's handle
 - The visible reply context, when a post is a reply
 - Your filter criteria
+- Posts you corrected, with your verdict on each, as examples
 - Image and video thumbnail URLs, **only** if you turn image analysis on
+
+In classifier mode, the default, the post goes to the provider you chose for the
+classifier: OpenRouter, Vercel AI Gateway or TypeSafe AI. With image analysis on,
+image URLs go to an image model through OpenRouter or Vercel AI Gateway, under
+your key for that provider, and the description it writes is sent along with the
+post. Only posts whose text leaves the decision in doubt have their images
+described; you set that range.
 
 Nothing else. No browsing history, no timeline outside the posts being checked,
 no identity, no account details.
@@ -43,8 +51,13 @@ pass through any server belonging to the developer, because there isn't one.
 
 Your provider's own privacy policy and data-retention terms apply to what they
 do with that request. Check them for the provider you pick — for example
-[OpenRouter](https://openrouter.ai/privacy), [OpenAI](https://openai.com/policies/privacy-policy),
-or [Anthropic](https://www.anthropic.com/legal/privacy).
+[OpenRouter](https://openrouter.ai/privacy), [Vercel](https://vercel.com/legal/privacy-policy),
+[OpenAI](https://openai.com/policies/privacy-policy), or
+[Anthropic](https://www.anthropic.com/legal/privacy).
+
+**Debug mode**, off by default, keeps what was sent and what came back for each
+post so you can inspect it on the page. That record lives in the open tab's
+memory only. It is never stored and never sent anywhere.
 
 ## Permissions, and why
 
@@ -56,7 +69,9 @@ or [Anthropic](https://www.anthropic.com/legal/privacy).
   is read or sent anywhere; the rules are stylesheet rules.
 - **Access to your provider's API** (`openrouter.ai`, `api.openai.com`,
   `api.anthropic.com`, or a custom endpoint you enter) — to send classification
-  requests. A custom endpoint asks for its own permission when you save it.
+  requests. `ai-gateway.vercel.sh`, `api.typesafe.ai` and a custom endpoint are
+  not granted at install: each asks for its own permission when you save
+  settings that use it.
 
 Sharp requests no other permissions and reads no other sites.
 

@@ -38,8 +38,16 @@ Describe what you want to see — or never see again — in plain language.
   a thread, filters off.
 - **Nothing shown before it's judged.** Undecided posts wait behind a
   placeholder, so nothing slips through and the timeline never jumps.
-- **Any OpenAI-compatible provider.** OpenRouter, OpenAI, Anthropic, or your
-  own endpoint.
+- **A classifier by default.** A decision model scores every post: fast, nearly
+  free, and it says how sure it is. Close calls stay behind a tinted banner, and
+  you set where the lines fall. Reach it through OpenRouter, Vercel AI Gateway or
+  TypeSafe AI, each with a key of its own.
+- **Or any chat model.** OpenRouter, OpenAI, Anthropic, or your own
+  OpenAI-compatible endpoint, if you would rather have a written reason.
+- **Images, when they matter.** Photos are described in words first, and only
+  for the posts whose text leaves it in doubt.
+- **Debug mode.** Open any judged post to see exactly what was sent, what came
+  back and how long each step took.
 - **YouTube, the quiet way.** Hide Shorts, hide comments, and show, blur or
   drop thumbnails. Durations stay. No model involved. Works on the mobile site
   too.
@@ -86,12 +94,16 @@ open.
 
 ## Set it up
 
-1. **General › Connection** — choose a provider and paste an API key.
-   [OpenRouter](https://openrouter.ai/keys) is the easiest start: one key reaches
-   most models, topped up a few dollars at a time.
-2. Pick a model. **Browse** sorts the catalogue by popularity, price, context or
-   measured latency.
-3. **X › Filtering** — write what you want filtered, then **Apply**.
+1. **General › AI** — paste a key for the classifier.
+   [OpenRouter](https://openrouter.ai/keys) is the easiest start: one key covers
+   the classifier and image descriptions, topped up a few dollars at a time. A
+   Vercel AI Gateway or TypeSafe AI key works too.
+2. **X › Filtering** — write what you want filtered, then **Apply**.
+3. Optional: **X › Advanced** sets where a hide starts, how wide the close-call
+   margin is, and which posts get their images described. It is also where you
+   switch to a chat model; set that model up under **General › AI**, where
+   **Browse** sorts the catalogue by popularity, price, context or measured
+   latency.
 
 Open X and scroll. **⌥⇧F** turns filtering on and off; **⌥⇧T** unfilters the
 thread you're reading.

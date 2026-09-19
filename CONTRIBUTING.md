@@ -142,10 +142,12 @@ no source file in `src/` touches `innerHTML`.
 src/
   index.ts      Content-script dispatcher: exact hostname → site entry
   common/       Settings/Post schemas, typed RPC, errors, shared rule operations
-  background/   Provider protocols, verdict parsing, durable cache, storage, RPC
+  background/   Provider protocols, the classifier, verdict parsing, durable cache,
+                storage, RPC
   x/
     index.ts    Explicit X adapter startup and teardown
-    ...         X DOM extraction, local rules, timeline lifecycle, in-page UI
+    ...         X DOM extraction, local rules, timeline lifecycle, in-page UI,
+                the debug inspector
   youtube/      Toggle-driven page rules: three attributes on <html>, one stylesheet
   popup/        Rail, per-site and general sections, model browser, list sheets
 tests/          Focused provider/storage, cache, RPC and menu checks
