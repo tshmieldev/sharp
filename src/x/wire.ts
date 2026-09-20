@@ -1,13 +1,36 @@
 // Runs in the page's world, not the extension's. It decorates window.fetch so
 // Sharp can read what X's own client already has: per-post feedback metadata
-// from timeline responses, and the headers X signs its API calls with. Nothing
-// here touches chrome.*, the DOM, or the request itself; the original fetch is
-// called with the original arguments and its response returned untouched.
-import { feedbackMetadata, pickSigning, type WireMessage } from './wire-extract';
+// from timeline responses, and the headers X signs its API calls with. Only
+// "Teach X too" uses either, so nothing is read or passed on unless the content
+// script says that setting is on. Nothing here touches chrome.*, the DOM, or
+// the request itself; the original fetch is called with the original arguments
+// and its response returned untouched.
+import {
+  createGate,
+  feedbackMetadata,
+  isWireSwitch,
+  pickSigning,
+  type WireMessage,
+} from './wire-extract';
 
 const apiPath = '/i/api/';
-const post = (message: WireMessage) => window.postMessage(message, location.origin);
+const gate = createGate((message: WireMessage) => window.postMessage(message, location.origin));
+const post = (message: WireMessage) => gate.send(message);
 let lastHeaders = '';
+
+let heard = false;
+window.addEventListener('message', (event) => {
+  if (event.source !== window || event.origin !== location.origin) return;
+  if (!isWireSwitch(event.data)) return;
+  heard = true;
+  // Turned on again later: the headers have to be sent again, not deduplicated.
+  if (event.data.on) lastHeaders = '';
+  gate.set(event.data.on);
+});
+// No word from the content script (disabled, or gone): stop looking.
+setTimeout(() => {
+  if (!heard) gate.set(false);
+}, 10_000);
 
 function requestOf(input: RequestInfo | URL, init?: RequestInit) {
   const url = input instanceof Request ? input.url : String(input);
@@ -42,7 +65,7 @@ window.fetch = function (input: RequestInfo | URL, init?: RequestInit) {
   const promise = original.call(this, input, init);
   try {
     const { url, headers } = requestOf(input, init);
-    if (url.includes(apiPath)) {
+    if (gate.reading && url.includes(apiPath)) {
       void promise.then((response) => observe(url, headers, response)).catch(() => {});
     }
   } catch {

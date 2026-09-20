@@ -59,6 +59,27 @@ do with that request. Check them for the provider you pick — for example
 post so you can inspect it on the page. That record lives in the open tab's
 memory only. It is never stored and never sent anywhere.
 
+## What Sharp does on X as you
+
+One optional feature, **Teach X too**, off by default, sends X's own "Not
+interested in this post" for posts Sharp hides on your Home timeline, so X's
+ranking learns from them. To do that the way X's own client does, Sharp runs a
+small script in the x.com page that wraps the page's `fetch`. While the feature
+is on, that script reads two things X's client already has:
+
+- the headers X signs its own API requests with, which include your X session
+  credentials (`authorization`, `x-csrf-token` and related headers)
+- the per-post feedback data in X's timeline responses
+
+It passes them to the rest of the extension inside the same page, and Sharp uses
+them to send that one request to X, to x.com, as you. They never leave the
+x.com page for anywhere else: not to your AI provider, not to the developer, not
+to storage. They are kept in the tab's memory only.
+
+While **Teach X too** is off, the script reads nothing and passes nothing on. It
+is still loaded, because a browser cannot load a page script conditionally, but
+it does no more than hand each request straight to X's own `fetch`.
+
 ## Permissions, and why
 
 - **Storage** — to save your settings, key, and decision cache locally.

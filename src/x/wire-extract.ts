@@ -52,6 +52,40 @@ export function pickSigning(headers: Headers): Record<string, string> | null {
   return picked.authorization && picked['x-csrf-token'] ? picked : null;
 }
 
+/** The content script's word on whether anything here is wanted: only "Teach X
+ *  too" uses it. The page script cannot read settings itself. */
+export type WireSwitch = { aitf: 'wire'; kind: 'switch'; on: boolean };
+export const isWireSwitch = (data: unknown): data is WireSwitch =>
+  typeof data === 'object' &&
+  data !== null &&
+  (data as { aitf?: unknown }).aitf === 'wire' &&
+  (data as { kind?: unknown }).kind === 'switch' &&
+  typeof (data as { on?: unknown }).on === 'boolean';
+
+/** Nothing is passed on until the content script says the feature is on. The
+ *  page script starts before settings can be read, and X's first timeline
+ *  response comes early, so until the word arrives a few messages are held
+ *  back rather than sent or lost. Off drops them and stops the reading itself. */
+export function createGate(post: (message: WireMessage) => void, limit = 20) {
+  let state: 'unknown' | 'on' | 'off' = 'unknown';
+  let held: WireMessage[] = [];
+  return {
+    /** Whether there is any point looking at a request at all. */
+    get reading() {
+      return state !== 'off';
+    },
+    send(message: WireMessage) {
+      if (state === 'on') post(message);
+      else if (state === 'unknown') held = [...held, message].slice(-limit);
+    },
+    set(on: boolean) {
+      state = on ? 'on' : 'off';
+      if (on) for (const message of held) post(message);
+      held = [];
+    },
+  };
+}
+
 export type WireMessage =
   | { aitf: 'wire'; kind: 'metadata'; entries: [string, string][] }
   | { aitf: 'wire'; kind: 'headers'; headers: Record<string, string> };
