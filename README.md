@@ -11,6 +11,8 @@ Describe what you want to see — or never see again — in plain language.
 
 <a href="https://chromewebstore.google.com/detail/sharp/colokgnfkjacfaahjbionncilmjioedo"><img height="36" src="https://img.shields.io/badge/Chrome_Web_Store-Install-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Install from the Chrome Web Store"></a>
 &nbsp;
+<a href="https://addons.mozilla.org/firefox/addon/sharp/"><img height="36" src="https://img.shields.io/badge/Firefox_Add--ons-Install-FF7139?style=for-the-badge&logo=firefoxbrowser&logoColor=white" alt="Install from Firefox Add-ons"></a>
+&nbsp;
 <a href="https://github.com/sponsors/tshmieldev"><img height="36" src="https://img.shields.io/badge/GitHub_Sponsors-%E2%9D%A4-ea4aaa?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor on GitHub"></a>
 <br>
 <a href="https://ko-fi.com/tshmieldev"><img height="36" src="https://storage.ko-fi.com/cdn/kofi3.png?v=6" alt="Buy me a coffee at ko-fi.com"></a>
@@ -68,10 +70,9 @@ else.
 **Chrome and other Chromium browsers:** from the
 [Chrome Web Store](https://chromewebstore.google.com/detail/sharp/colokgnfkjacfaahjbionncilmjioedo).
 
-**Firefox:** submitted to [addons.mozilla.org](https://addons.mozilla.org/) and
-awaiting review. Until it is signed, grab `sharp-<version>-firefox.zip` from
-[Releases](https://github.com/tshmieldev/sharp/releases) or build it from source
-below, and load it as a temporary add-on. Firefox 140 or newer.
+**Firefox:** from
+[Firefox Add-ons](https://addons.mozilla.org/firefox/addon/sharp/). Firefox 140
+or newer.
 
 From source, with [Bun](https://bun.sh):
 
@@ -87,10 +88,10 @@ unpacked**, and pick the repository folder.
 
 In Firefox, open `about:debugging` → **This Firefox** → **Load Temporary
 Add-on**, and pick `firefox/manifest.json`. A temporary add-on is gone after a
-restart, which is why the AMO listing matters. Firefox hands out site access one
-origin at a time, so open Sharp and use **Grant access** if it says it has none
-for x.com, youtube.com or your provider; reload any tabs that were already
-open.
+restart; the listing above is the one that stays. Firefox hands out site
+access one origin at a time, so open Sharp and use **Grant access** if it says
+it has none for x.com, youtube.com or your provider; reload any tabs that were
+already open.
 
 ## Set it up
 
