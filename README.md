@@ -35,11 +35,15 @@ Describe what you want to see — or never see again — in plain language.
 - **Teach it.** Mark a hidden post as a wrong call, or pick "Hide posts like
   this" from the ⋯ menu; your recent corrections go to the model as examples.
 - **Teach X too.** Optionally, Sharp tells X you're not interested in what it
-  hides, so the algorithm learns alongside the model.
+  hides, so the algorithm learns alongside the model. This is the one feature
+  that acts as you on X; the [privacy policy](privacy-policy.md) says exactly
+  how.
 - **Thread escape hatch.** One click above the reply box shows every comment in
   a thread, filters off.
 - **Nothing shown before it's judged.** Undecided posts wait behind a
-  placeholder, so nothing slips through and the timeline never jumps.
+  placeholder, so the timeline never jumps. If your provider keeps failing, a
+  post is shown after three tries rather than held back forever: a broken
+  provider should not blank your timeline.
 - **A classifier by default.** A decision model scores every post: fast, nearly
   free, and it says how sure it is. Close calls stay behind a tinted banner, and
   you set where the lines fall. Reach it through OpenRouter, Vercel AI Gateway or

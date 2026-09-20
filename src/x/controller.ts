@@ -16,6 +16,7 @@ import * as view from './view';
 import { ThreadControl } from './thread-control';
 import { NotInterested } from './not-interested';
 import { Feedback } from './feedback';
+import type { WireSwitch } from './wire-extract';
 
 type Phase =
   | { type: 'queued' }
@@ -227,6 +228,13 @@ export class TimelineController {
     void this.refresh();
   };
 
+  /** Tells the page script whether "Teach X too" is on. It reads X's requests
+   *  only while it is, and cannot see settings itself. */
+  private wire(on: boolean) {
+    const message: WireSwitch = { aitf: 'wire', kind: 'switch', on };
+    window.postMessage(message, location.origin);
+  }
+
   async refresh() {
     const revision = ++this.refreshing;
     try {
@@ -242,6 +250,7 @@ export class TimelineController {
       }
       this.settings = settings;
       this.rules = createRules(settings);
+      this.wire(settings.enabled && settings.notInterested);
       document.documentElement.dataset.aitfMotion = settings.motion;
       if (settings.greyscaleUi) document.documentElement.dataset.aitfGreyUi = '';
       else delete document.documentElement.dataset.aitfGreyUi;
@@ -275,6 +284,7 @@ export class TimelineController {
     this.hiddenInfo.clear();
     this.threadControl.dispose();
     this.notInterested.stop();
+    this.wire(false);
     this.feedback.stop();
     delete document.documentElement.dataset.aitfMotion;
     delete document.documentElement.dataset.aitfGreyUi;

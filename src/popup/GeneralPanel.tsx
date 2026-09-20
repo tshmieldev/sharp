@@ -124,7 +124,7 @@ export function GeneralPanel({
         <section class="group">
           <a
             class="support"
-            href="https://github.com/tshmielash"
+            href="https://github.com/tshmieldev/sharp"
             target="_blank"
             rel="noreferrer noopener"
           >
