@@ -4,7 +4,6 @@ import { CLASSIFIER_REASON, decisionsUrl, verdictFor } from '../src/background/c
 import { classify } from '../src/background/providers';
 import {
   apiOrigins,
-  CLASSIFIER_GROUP,
   CLASSIFIER_MODEL,
   closeCallLine,
   decisionScope,
@@ -18,7 +17,8 @@ import {
   visionProvider,
 } from '../src/common/settings';
 
-const settings = { ...defaults, apiKeys: { openrouter: 'test-key' } };
+// One post per request here; the tests at the bottom cover groups.
+const settings = { ...defaults, batchSize: 1, apiKeys: { openrouter: 'test-key' } };
 const post = (key: string, images: string[] = [], text = `post ${key}`) => ({
   key,
   handle: 'alice',
@@ -42,9 +42,20 @@ function stubOpenRouter(
       const body = JSON.parse(String(init.body));
       calls.push({ url, body });
       if (url.endsWith('/api/alpha/decisions') || url.endsWith('/v1/systemone')) {
+        // A group is keyed p1..pN; each post is scored as if it were alone.
+        const group: Record<string, { text: string; images?: string[] }> | undefined =
+          body.state.posts;
+        const answers = group
+          ? Object.fromEntries(
+              Object.entries(group).map(([id, entry]) => [
+                id,
+                { type: 'noul', noul: noul({ state: { post: entry } }) },
+              ]),
+            )
+          : { hide: { type: 'noul', noul: noul(body) } };
         return Response.json({
           model: CLASSIFIER_MODEL,
-          answers: { hide: { type: 'noul', noul: noul(body) } },
+          answers,
           usage: { input_tokens: 40, output_tokens: 1 },
         });
       }
@@ -340,20 +351,21 @@ it('never judges more posts at once than the reader allows', async () => {
   expect(await peak(12)).toBe(12);
 });
 
-it('sends small groups in classifier mode, enough of them to fill every slot', () => {
-  expect(requestPlan({ ...settings, classifierConcurrency: 16 })).toEqual({
-    batchSize: CLASSIFIER_GROUP,
-    inFlight: 4,
+it('hands the worker one request’s worth of posts per message, in either mode', () => {
+  expect(requestPlan({ ...settings, batchSize: 12, classifierConcurrency: 16 })).toEqual({
+    batchSize: 12,
+    inFlight: 16,
   });
-  expect(requestPlan({ ...settings, classifierConcurrency: 64 }).inFlight).toBe(16);
-  expect(requestPlan({ ...settings, classifierConcurrency: 1 }).inFlight).toBe(1);
-  // The language model keeps the reader's own batch size and request count.
+  expect(requestPlan({ ...settings, batchSize: 1, classifierConcurrency: 64 })).toEqual({
+    batchSize: 1,
+    inFlight: 64,
+  });
   expect(requestPlan({ ...settings, decisionMode: 'llm', batchSize: 12, concurrency: 12 })).toEqual(
     { batchSize: 12, inFlight: 12 },
   );
 });
 
-it('allows up to 64 classifier posts and 12 language-model requests at once', () => {
+it('allows up to 64 classifier requests and 12 language-model requests at once', () => {
   const decode = Schema.decodeUnknownSync(Settings);
   expect(decode({ ...defaults, classifierConcurrency: 64, concurrency: 12 })).toMatchObject({
     classifierConcurrency: 64,
@@ -457,4 +469,118 @@ it('draws the close-call line a margin over the hide line, never past 100%', () 
     hideFrom: 0,
     imageCheckFrom: 0,
   });
+});
+
+it('judges a group in one request, each question naming its own post', async () => {
+  const calls = stubOpenRouter((body) => (body.state.post.text.includes('shill') ? 0.96 : 0.04));
+  const group = { ...settings, batchSize: 8 };
+  const posts = [post('a'), post('b', [], 'pure shill'), post('c')];
+  const result = await Effect.runPromise(classify(group, posts));
+  expect(calls).toHaveLength(1);
+  const body = calls[0]!.body;
+  expect(Object.keys(body.state.posts)).toEqual(['p1', 'p2', 'p3']);
+  expect(body.state.post).toBeUndefined();
+  expect(body.state.posts.p2).toMatchObject({ author: '@alice', text: 'pure shill' });
+  expect(Object.keys(body.questions)).toEqual(['p1', 'p2', 'p3']);
+  expect(body.questions.p2.instructions).toContain('Judge only the post with id "p2"');
+  expect(body.questions.p2.instructions).toContain(defaults.criteria);
+  // Answers come back to the posts they belong to, in order.
+  expect(result.verdicts.map((verdict) => [verdict.key, verdict.hide, verdict.score])).toEqual([
+    ['a', false, 0.04],
+    ['b', true, 0.96],
+    ['c', false, 0.04],
+  ]);
+  // A lone post keeps the single shape, whatever the batch size.
+  const alone = stubOpenRouter(() => 0.9);
+  await Effect.runPromise(classify(group, [post('d')]));
+  expect(alone[0]!.body.state.post).toMatchObject({ text: 'post d' });
+  expect(Object.keys(alone[0]!.body.questions)).toEqual(['hide']);
+});
+
+it('splits a call larger than the batch size, and gates requests, not posts', async () => {
+  let open = 0;
+  let most = 0;
+  let requests = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (_url: string, init: RequestInit) => {
+      requests++;
+      most = Math.max(most, ++open);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      open--;
+      const ids = Object.keys(JSON.parse(String(init.body)).questions);
+      return Response.json({
+        answers: Object.fromEntries(ids.map((id) => [id, { type: 'noul', noul: 0.1 }])),
+      });
+    }),
+  );
+  const posts = Array.from({ length: 12 }, (_, index) => post(`split-${index}`));
+  const result = await Effect.runPromise(
+    classify({ ...settings, batchSize: 4, classifierConcurrency: 2 }, posts),
+  );
+  expect(requests).toBe(3);
+  expect(most).toBe(2);
+  expect(result.verdicts).toHaveLength(12);
+  expect(result.verdicts.every((verdict) => verdict.score === 0.1)).toBe(true);
+});
+
+it('looks at images for the whole group in one second request, only where wanted', async () => {
+  const calls = stubOpenRouter((body) =>
+    body.state.post.images ? 0.95 : body.state.post.text === 'unsure' ? 0.6 : 0.1,
+  );
+  const on = { ...settings, batchSize: 8, analyzeImages: true, visionModel: 'test/group' };
+  const image = (name: string) => [
+    `https://pbs.twimg.com/media/group-${name}-${Math.random()}.jpg`,
+  ];
+  const result = await Effect.runPromise(
+    classify(on, [
+      post('fine', image('a'), 'fine'),
+      post('unsure', image('b'), 'unsure'),
+      post('plain', [], 'plain'),
+      post('textless', image('c'), ''),
+    ]),
+  );
+  const decisions = calls.filter((call) => !call.url.endsWith('/chat/completions'));
+  // Text first, for the posts that have text.
+  expect(Object.values<any>(decisions[0]!.body.state.posts).map((entry) => entry.text)).toEqual([
+    'fine',
+    'unsure',
+    'plain',
+  ]);
+  expect(JSON.stringify(decisions[0]!.body)).not.toContain('"images"');
+  // Then one more request, for the in-range post and the one with no text.
+  expect(decisions).toHaveLength(2);
+  const second = Object.values<any>(decisions[1]!.body.state.posts);
+  expect(second.map((entry) => entry.text)).toEqual(['unsure', '(no text)']);
+  expect(second.every((entry) => entry.images?.length === 1)).toBe(true);
+  expect(calls.filter((call) => call.body.model === 'test/group')).toHaveLength(2);
+  expect(result.verdicts.map((verdict) => verdict.score)).toEqual([0.1, 0.95, 0.1, 0.95]);
+});
+
+it('fails only the post the classifier skipped, and surfaces a group that failed whole', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => Response.json({ answers: { p1: { type: 'noul', noul: 0.9 } } })),
+  );
+  const group = { ...settings, batchSize: 8 };
+  const result = await Effect.runPromise(classify(group, [post('1'), post('2')]));
+  expect(result.verdicts[0]).toMatchObject({ key: '1', hide: true, score: 0.9 });
+  expect(result.verdicts[1]).toEqual({ key: '2', hide: false, reason: '', failed: true });
+
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response('', { status: 429 })),
+  );
+  await expect(Effect.runPromise(classify(group, [post('1'), post('2')]))).rejects.toThrow(
+    'Rate limited',
+  );
+});
+
+it('says in the trace how many posts shared the request', async () => {
+  stubOpenRouter(() => 0.9);
+  const result = await Effect.runPromise(
+    classify({ ...settings, batchSize: 8, debug: true }, [post('t1'), post('t2'), post('t3')]),
+  );
+  expect(result.verdicts.map((verdict) => verdict.trace?.batch)).toEqual([3, 3, 3]);
+  expect(Object.keys((result.verdicts[0]!.trace!.request as any).questions)).toHaveLength(3);
 });
