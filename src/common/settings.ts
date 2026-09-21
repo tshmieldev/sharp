@@ -262,21 +262,15 @@ export function providerOrigins(
   }
 }
 
-/** A classifier judges one post per request, so grouping posts saves nothing;
- *  it only makes quick posts wait for a slow one. Posts go to the worker in
- *  small groups, enough of them to keep every slot the reader allowed busy. */
-export const CLASSIFIER_GROUP = 4;
-
 /** How the page hands posts to the worker: how many per message, and how many
  *  messages may be unanswered at once. */
 export function requestPlan(
   settings: Pick<Settings, 'decisionMode' | 'batchSize' | 'concurrency' | 'classifierConcurrency'>,
 ) {
+  // Either way one message is one request's worth of posts; only the number
+  // of requests allowed at once differs, since a classifier answers so quickly.
   return usesClassifier(settings)
-    ? {
-        batchSize: CLASSIFIER_GROUP,
-        inFlight: Math.ceil(settings.classifierConcurrency / CLASSIFIER_GROUP),
-      }
+    ? { batchSize: settings.batchSize, inFlight: settings.classifierConcurrency }
     : { batchSize: settings.batchSize, inFlight: settings.concurrency };
 }
 
@@ -349,7 +343,7 @@ export function publicSettings(settings: Settings): PublicSettings {
 /** Bump when the system prompt changes in a way that should re-judge cached
  *  posts. Cached verdicts are keyed on this, so a bump re-buys the visible
  *  timeline once; leave it alone for wording that cannot change a verdict. */
-export const PROMPT_VERSION = 2;
+export const PROMPT_VERSION = 3;
 
 export function decisionScope(settings: PublicSettings | Settings): string {
   // The hide and close-call lines are not here: a classifier's probability is

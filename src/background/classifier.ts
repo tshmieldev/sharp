@@ -1,8 +1,10 @@
-// Decide with a classifier: a decision-only model reached through OpenRouter's
-// Decisions endpoint. It answers typed questions with calibrated probabilities
-// and never writes text, so it cannot read images or give a reason. Images are
-// turned into text first by a fast vision model. The probability travels with
-// the verdict; how sure counts as sure is the reader's call, made at display.
+// Decide with a classifier: a decision-only model that answers typed questions
+// with calibrated probabilities and never writes text, so it cannot read images
+// or give a reason. It answers every question in a request in parallel, so
+// posts go to it in groups: about one round trip and half the tokens of asking
+// one by one. Images are turned into text first by a fast vision model. The
+// probability travels with the verdict; how sure counts as sure is the reader's
+// call, made at display.
 import { Effect, Schema } from 'effect';
 import type { Post, Trace, Verdict } from '../common/post';
 import {
@@ -17,11 +19,10 @@ import {
 import { ProviderError, requestJson } from './providers';
 
 export { CLASSIFIER_REASON };
-/** One gate for the whole worker, sized to the reader's setting: every post
- *  being judged holds a slot until its images and its decision are done, across
- *  every group and every tab. Each post is its own request, so one post's
- *  context can never leak into another's decision. A resize takes a fresh gate;
- *  posts already inside the old one finish there. */
+/** One gate for the whole worker, sized to the reader's setting: every group
+ *  being judged holds a slot until its images and its decisions are done,
+ *  across every tab. A resize takes a fresh gate; groups already inside the old
+ *  one finish there. */
 let gate: { size: number; semaphore: Effect.Semaphore } | null = null;
 function gateFor(size: number) {
   if (gate?.size !== size) gate = { size, semaphore: Effect.runSync(Effect.makeSemaphore(size)) };
@@ -147,18 +148,47 @@ function describe(settings: Settings, url: string) {
   );
 }
 
-export function decisionBody(settings: Settings, post: Post, images: readonly string[]) {
+type Entry = { post: Post; images: readonly string[] };
+/** A lone post answers to `hide`; a group is keyed p1..pN, one question each. */
+const idOf = (index: number, alone: boolean) => (alone ? 'hide' : `p${index + 1}`);
+
+/** One request for one post or for several. The classifier answers every
+ *  question in a request in parallel, so a group costs about one round trip and
+ *  far fewer tokens than the same posts asked one by one. Each question names
+ *  its own post, so the others are context and never the subject. */
+export function decisionBody(settings: Settings, entries: readonly Entry[]) {
   const provider = settings.classifierProvider;
+  const alone = entries.length === 1;
+  const shape = ({ post, images }: Entry) => ({
+    author: `@${post.handle}`,
+    text: post.text || '(no text)',
+    ...(post.context ? { replying_to: post.context } : {}),
+    ...(images.length ? { images } : {}),
+  });
+  const question = (id: string) => ({
+    // Vercel's gateway calls the type `boolean`.
+    type: provider === 'vercel' ? 'boolean' : 'noul',
+    instructions:
+      `A reader filters their X timeline with this instruction, in their own words: ` +
+      `"${settings.criteria}". Follow it literally: where it names what to hide, hide ` +
+      `those posts; where it names what to keep, hide every post it does not cover. ` +
+      `Judge a reply on its own merits, not on what it replies to. Where the reader ` +
+      `decided similar posts themselves, judge the same way.` +
+      (alone
+        ? ''
+        : ` Judge only the post with id "${id}", on its own merits, whatever the other posts say.`),
+    criteria: {
+      true: 'Hide this post: the instruction says the reader does not want it.',
+      false: 'Show this post: the instruction does not rule it out.',
+    },
+  });
   return {
-    // Vercel's gateway names the model in a header and calls the type `boolean`.
+    // Vercel's gateway names the model in a header.
     ...(provider === 'vercel' ? {} : { model: classifierProviders[provider].model }),
     state: {
-      post: {
-        author: `@${post.handle}`,
-        text: post.text || '(no text)',
-        ...(post.context ? { replying_to: post.context } : {}),
-        ...(images.length ? { images } : {}),
-      },
+      ...(alone
+        ? { post: shape(entries[0]!) }
+        : { posts: Object.fromEntries(entries.map((entry, i) => [idOf(i, false), shape(entry)])) }),
       ...(settings.corrections.length
         ? {
             reader_decisions_on_similar_posts: settings.corrections.map((entry) => ({
@@ -169,21 +199,9 @@ export function decisionBody(settings: Settings, post: Post, images: readonly st
           }
         : {}),
     },
-    questions: {
-      hide: {
-        type: provider === 'vercel' ? 'boolean' : 'noul',
-        instructions:
-          `A reader filters their X timeline with this instruction, in their own words: ` +
-          `"${settings.criteria}". Follow it literally: where it names what to hide, hide ` +
-          `those posts; where it names what to keep, hide every post it does not cover. ` +
-          `Judge a reply on its own merits, not on what it replies to. Where the reader ` +
-          `decided similar posts themselves, judge the same way.`,
-        criteria: {
-          true: 'Hide this post: the instruction says the reader does not want it.',
-          false: 'Show this post: the instruction does not rule it out.',
-        },
-      },
-    },
+    questions: Object.fromEntries(
+      entries.map((_, i) => [idOf(i, alone), question(idOf(i, alone))]),
+    ),
   };
 }
 
@@ -198,11 +216,11 @@ export function verdictFor(
   return readVerdict(lines, { key, hide: false, reason: '', score });
 }
 
-/** One question to the classifier: the probability, its cost, and what went
- *  over the wire. */
-function decide(settings: Settings, post: Post, images: readonly string[]) {
+/** One request: a probability per post (none where the classifier skipped
+ *  one), what it cost, and what went over the wire. */
+function decide(settings: Settings, entries: readonly Entry[]) {
   return Effect.gen(function* () {
-    const body = decisionBody(settings, post, images);
+    const body = decisionBody(settings, entries);
     const started = performance.now();
     const raw = yield* requestJson(
       settings,
@@ -220,76 +238,138 @@ function decide(settings: Settings, post: Post, images: readonly string[]) {
     const tokens =
       (usage?.input_tokens ?? usage?.inputTokens ?? 0) +
       (usage?.output_tokens ?? usage?.outputTokens ?? 0);
-    const probability = data.answers.hide?.noul ?? data.answers.hide?.probability;
-    if (probability === undefined) {
-      return yield* new ProviderError({ message: 'The classifier did not answer.', tokens });
-    }
-    return { probability, tokens, ms, body, raw };
+    const alone = entries.length === 1;
+    const probabilities = entries.map((_, i) => {
+      const answer = data.answers[idOf(i, alone)];
+      return answer?.noul ?? answer?.probability;
+    });
+    return { probabilities, tokens, ms, body, raw, size: entries.length };
   });
 }
+type Pass = Effect.Effect.Success<ReturnType<typeof decide>>;
+type Answer = { probability: number; pass: Pass };
 
-/** Text first; images only where the reader wants a second look. A post whose
- *  text-only score lands outside the reader's range stands on it and never pays
- *  for a description. One inside it is asked again with its images described,
- *  and that second answer is the verdict. A range covering every score skips
- *  the text-only pass, which could settle nothing. A post with no text has nothing to
- *  judge without its images, so it goes straight to them. */
-function judge(settings: Settings, post: Post) {
+/** A group of posts, judged together. Text first; images only where the reader
+ *  wants a second look. A post whose text-only score lands outside the reader's
+ *  range stands on it and never pays for a description. The ones inside it have
+ *  their images described and are asked again, together, and that second answer
+ *  is the verdict. A range covering every score skips the text-only pass, which
+ *  could settle nothing, and a post with no text has nothing to judge without
+ *  its images, so both go straight to the second request. */
+function judge(settings: Settings, posts: readonly Post[]) {
   return Effect.gen(function* () {
     const started = performance.now();
-    const wanted = settings.analyzeImages ? post.images : [];
     const always = settings.imageCheckFrom <= 0 && settings.imageCheckBelow >= 1;
-    const textOnly =
-      wanted.length > 0 && post.text.trim() && !always ? yield* decide(settings, post, []) : null;
-    const needsImages =
-      wanted.length > 0 && (!textOnly || imagesWanted(settings, textOnly.probability));
-    const described = needsImages
-      ? yield* Effect.forEach(wanted, (url) => describe(settings, url), {
-          concurrency: 'unbounded',
-        })
-      : [];
-    const seen = described.map((image) => image.text).filter(Boolean);
+    const wanted = posts.map((post) => (settings.analyzeImages ? post.images : []));
+    const textFirst = posts.map(
+      (post, i) => wanted[i]!.length === 0 || (Boolean(post.text.trim()) && !always),
+    );
+    let tokens = 0;
+    let failure: ProviderError | undefined;
+    const ask = (indexes: readonly number[], images: (i: number) => readonly string[]) =>
+      Effect.gen(function* () {
+        const answers = new Map<number, Answer>();
+        if (!indexes.length) return answers;
+        const result = yield* Effect.either(
+          decide(
+            settings,
+            indexes.map((i) => ({ post: posts[i]!, images: images(i) })),
+          ),
+        );
+        if (result._tag === 'Left') {
+          failure ??=
+            result.left instanceof ProviderError
+              ? result.left
+              : new ProviderError({ message: 'Classifier request failed.' });
+          return answers;
+        }
+        tokens += result.right.tokens;
+        indexes.forEach((i, at) => {
+          const probability = result.right.probabilities[at];
+          if (probability !== undefined) answers.set(i, { probability, pass: result.right });
+        });
+        return answers;
+      });
+
+    const first = yield* ask(
+      posts.flatMap((_, i) => (textFirst[i] ? [i] : [])),
+      () => [],
+    );
+    const looking = posts.flatMap((_, i) => {
+      if (!wanted[i]!.length) return [];
+      const text = first.get(i);
+      // A failed text-only request is not a reason to pay for images too.
+      if (textFirst[i]) return text && imagesWanted(settings, text.probability) ? [i] : [];
+      return [i];
+    });
+    const described = new Map(
+      yield* Effect.forEach(
+        looking,
+        (i) =>
+          Effect.forEach(wanted[i]!, (url) => describe(settings, url), {
+            concurrency: 'unbounded',
+          }).pipe(Effect.map((images) => [i, images] as const)),
+        { concurrency: 'unbounded' },
+      ),
+    );
+    for (const images of described.values()) {
+      tokens += images.reduce((sum, image) => sum + image.tokens, 0);
+    }
+    const seen = (i: number) => (described.get(i) ?? []).map((image) => image.text).filter(Boolean);
     // No description came back: asking again would only repeat the text's answer.
-    const final = textOnly && seen.length === 0 ? textOnly : yield* decide(settings, post, seen);
-    const tokens =
-      final.tokens +
-      (textOnly && textOnly !== final ? textOnly.tokens : 0) +
-      described.reduce((sum, image) => sum + image.tokens, 0);
-    const verdict = verdictFor(post.key, final.probability, settings);
-    if (!settings.debug) return { verdict, tokens };
-    const trace: Trace = {
-      source: 'classifier',
-      model: classifierProviders[settings.classifierProvider].model,
-      at: Date.now(),
-      totalMs: performance.now() - started,
-      requestMs: final.ms,
-      tokens,
-      images: wanted.map((url, index) => {
-        const image = described[index];
-        if (!image) return { url, skipped: true };
-        return {
-          url,
-          model: settings.visionModel,
-          description: image.text,
-          ms: image.ms,
-          cached: image.cached,
-          ...(image.failed ? { failed: true } : {}),
-        };
-      }),
-      ...(textOnly && textOnly !== final
-        ? {
-            textPass: {
-              score: textOnly.probability,
-              ms: textOnly.ms,
-              request: textOnly.body,
-              response: textOnly.raw,
-            },
-          }
-        : {}),
-      request: final.body,
-      response: final.raw,
-    };
-    return { verdict: { ...verdict, trace }, tokens };
+    const second = yield* ask(
+      looking.filter((i) => !first.has(i) || seen(i).length > 0),
+      seen,
+    );
+
+    const totalMs = performance.now() - started;
+    const verdicts = posts.map((post, i): Verdict => {
+      const final = second.get(i) ?? first.get(i);
+      if (!final) return { key: post.key, hide: false, reason: '', failed: true };
+      const verdict = verdictFor(post.key, final.probability, settings);
+      if (!settings.debug) return verdict;
+      const text = second.has(i) ? first.get(i) : undefined;
+      const trace: Trace = {
+        source: 'classifier',
+        model: classifierProviders[settings.classifierProvider].model,
+        at: Date.now(),
+        totalMs,
+        requestMs: final.pass.ms,
+        batch: final.pass.size,
+        // What this post's requests cost. A group's request is shared, so its
+        // whole cost shows on every post that was in it.
+        tokens:
+          final.pass.tokens +
+          (text?.pass.tokens ?? 0) +
+          (described.get(i) ?? []).reduce((sum, image) => sum + image.tokens, 0),
+        images: wanted[i]!.map((url, at) => {
+          const image = described.get(i)?.[at];
+          if (!image) return { url, skipped: true };
+          return {
+            url,
+            model: settings.visionModel,
+            description: image.text,
+            ms: image.ms,
+            cached: image.cached,
+            ...(image.failed ? { failed: true } : {}),
+          };
+        }),
+        ...(text
+          ? {
+              textPass: {
+                score: text.probability,
+                ms: text.pass.ms,
+                request: text.pass.body,
+                response: text.pass.raw,
+              },
+            }
+          : {}),
+        request: final.pass.body,
+        response: final.pass.raw,
+      };
+      return { ...verdict, trace };
+    });
+    return { verdicts, tokens, failure };
   });
 }
 
@@ -300,31 +380,27 @@ export function classifyWithClassifier(settings: Settings, items: readonly Post[
         message: `Set a ${classifierProviders[settings.classifierProvider].label} key and filter criteria first.`,
       });
     }
+    // The page already sends groups of this size; a larger call is split here.
+    const groups: Post[][] = [];
+    for (let i = 0; i < items.length; i += settings.batchSize) {
+      groups.push(items.slice(i, i + settings.batchSize));
+    }
     const semaphore = gateFor(settings.classifierConcurrency);
     const results = yield* Effect.forEach(
-      items,
-      (post) => Effect.either(semaphore.withPermits(1)(judge(settings, post))),
+      groups,
+      (group) => semaphore.withPermits(1)(judge(settings, group)),
       { concurrency: 'unbounded' },
     );
-    const tokens = results.reduce(
-      (sum, result) =>
-        sum + (result._tag === 'Right' ? result.right.tokens : (result.left.tokens ?? 0)),
-      0,
-    );
-    // One bad post is retried later; every post failing is a real problem.
-    const failures = results.filter((result) => result._tag === 'Left');
-    if (failures.length === results.length && failures[0]?._tag === 'Left') {
-      const error = failures[0].left;
+    const verdicts = results.flatMap((result) => result.verdicts);
+    const tokens = results.reduce((sum, result) => sum + result.tokens, 0);
+    // A few bad posts are retried later; every post failing is a real problem.
+    if (verdicts.length && verdicts.every((verdict) => verdict.failed)) {
+      const failure = results.find((result) => result.failure)?.failure;
       return yield* new ProviderError({
-        message: error instanceof ProviderError ? error.message : 'Classifier request failed.',
+        message: failure?.message ?? 'The classifier did not answer.',
         tokens,
       });
     }
-    const verdicts: Verdict[] = results.map((result, index) =>
-      result._tag === 'Right'
-        ? result.right.verdict
-        : { key: items[index]!.key, hide: false, reason: '', failed: true },
-    );
     return { verdicts, tokens };
   });
 }

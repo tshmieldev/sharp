@@ -176,7 +176,16 @@ export function XPanel({
           <section class="group">
             <h2>Speed</h2>
             <RangeField
-              label="Posts at once"
+              label="Posts per request"
+              min={1}
+              max={30}
+              step={1}
+              value={settings.batchSize}
+              display={String(settings.batchSize)}
+              onChange={(next) => update('batchSize', next)}
+            />
+            <RangeField
+              label="Requests at once"
               min={1}
               max={64}
               step={1}
@@ -185,8 +194,9 @@ export function XPanel({
               onChange={(next) => update('classifierConcurrency', next)}
             />
             <p class="note tight">
-              Each post is its own request, so this is how many run at once, across every tab. More
-              settles the timeline faster; the cost per post is the same either way.
+              {settings.batchSize === 1
+                ? 'Every post is judged alone, in a request of its own. Slower and about twice the cost, but no post ever sees another.'
+                : `The classifier answers ${settings.batchSize} posts in about the time it takes for one, for roughly half the cost. Clear cases score the same either way; borderline ones can move a little, since posts are judged side by side.`}
             </p>
           </section>
         ) : (
