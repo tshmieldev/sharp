@@ -1,0 +1,4 @@
+# Rendered videos and frame sheets; the sources are the .html files.
+*.mp4
+*.png
+.frames/

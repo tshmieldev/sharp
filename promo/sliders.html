@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Sharp promo: the sliders</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* A 1280x720 stage. Nothing here runs on a clock: `seek(t)` draws the
+         frame for second `t`, so a recorder can step through it frame by frame
+         and a browser can just play it. */
+      :root {
+        --bg: #0b0b10;
+        --surface: #16161e;
+        --line: #2a2a35;
+        --text: #eeecf6;
+        --muted: #9a98ae;
+        --accent: #8b7dff;
+        --danger: #ff6f88;
+        --kept: #3b3b49;
+        --close: #8a4a5c;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+      html,
+      body {
+        width: 1280px;
+        height: 720px;
+        overflow: hidden;
+        background: var(--bg);
+        color: var(--text);
+        font-family: 'Schibsted Grotesk', system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      #stage {
+        position: relative;
+        width: 1280px;
+        height: 720px;
+      }
+      #stage > * {
+        position: absolute;
+        will-change: transform, opacity;
+      }
+
+      /* Scene 1: the filter, typed. It then shrinks into the corner and stays. */
+      #prompt {
+        left: 0;
+        top: 0;
+        transform-origin: 0 0;
+      }
+      #prompt .label {
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: var(--muted);
+        margin-bottom: 12px;
+      }
+      #prompt .field {
+        width: 760px;
+        padding: 26px 30px;
+        border: 1.5px solid var(--line);
+        border-radius: 20px;
+        background: var(--surface);
+        font-size: 40px;
+        font-weight: 500;
+        letter-spacing: -0.02em;
+        white-space: nowrap;
+        box-shadow: 0 24px 60px -30px rgb(0 0 0 / 0.8);
+      }
+      #caret {
+        display: inline-block;
+        width: 3px;
+        height: 42px;
+        margin-left: 3px;
+        vertical-align: -7px;
+        border-radius: 2px;
+        background: var(--accent);
+      }
+
+      #caption {
+        left: 0;
+        top: 72px;
+        width: 1280px;
+        text-align: center;
+        font-size: 34px;
+        font-weight: 600;
+        letter-spacing: -0.025em;
+      }
+      #caption em {
+        font-style: normal;
+        color: var(--accent);
+      }
+
+      /* Posts hang above the bar, each on a stem down to its score. */
+      .card {
+        left: 0;
+        top: 0;
+        width: 320px;
+        height: 96px;
+        font-family: -apple-system, system-ui, sans-serif;
+      }
+      .card .face {
+        position: absolute;
+        inset: 0;
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--surface);
+      }
+      .card .who {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .card .who i {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: var(--tone);
+      }
+      .card .who span {
+        margin-left: auto;
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
+        color: var(--muted);
+      }
+      .card .text {
+        margin-top: 8px;
+        font-size: 15px;
+        line-height: 1.3;
+      }
+      .card .banner {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        top: 26px;
+        bottom: 26px;
+        padding: 0 14px;
+        font-size: 13.5px;
+        white-space: nowrap;
+      }
+      .card .banner b {
+        font-weight: 600;
+      }
+      .card .banner span {
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .card .banner u {
+        margin-left: auto;
+        padding: 3px 11px;
+        border: 1px solid var(--line);
+        border-radius: 99px;
+        font-size: 12.5px;
+        font-weight: 600;
+        text-decoration: none;
+      }
+      .stem {
+        left: 0;
+        top: 0;
+        width: 1.5px;
+        background: var(--line);
+        transform-origin: 0 0;
+      }
+      .dot {
+        left: -7px;
+        top: -7px;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        border: 2.5px solid var(--bg);
+        background: var(--text);
+      }
+
+      /* The bar: three zones, each a full-width layer clipped to its span. */
+      #bar {
+        left: 90px;
+        top: 500px;
+        width: 1100px;
+        height: 14px;
+        border-radius: 99px;
+        clip-path: inset(0 round 99px);
+        background: var(--kept);
+      }
+      #bar i {
+        position: absolute;
+        inset: 0;
+      }
+      #zclose {
+        background: var(--close);
+      }
+      #zsure {
+        background: var(--danger);
+      }
+      #ends {
+        left: 90px;
+        top: 524px;
+        width: 1100px;
+        display: flex;
+        justify-content: space-between;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--muted);
+      }
+      .handle {
+        left: -13px;
+        top: 494px;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        border: 3px solid var(--bg);
+        background: var(--accent);
+        box-shadow: 0 6px 14px -4px rgb(0 0 0 / 0.7);
+      }
+      .tag {
+        left: 0;
+        top: 454px;
+        transform-origin: 50% 100%;
+        padding: 4px 10px;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #0e0a24;
+        font-size: 13.5px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      #legend {
+        left: 90px;
+        top: 560px;
+        width: 1100px;
+        display: flex;
+        gap: 26px;
+        justify-content: center;
+        font-size: 15px;
+        font-weight: 500;
+        color: var(--muted);
+      }
+      #legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      #legend span::before {
+        content: '';
+        width: 10px;
+        height: 10px;
+        border-radius: 3px;
+        background: var(--c);
+      }
+
+      /* End card. */
+      #end {
+        inset: 0;
+        display: grid;
+        place-content: center;
+        justify-items: center;
+        gap: 18px;
+        text-align: center;
+      }
+      #end img {
+        width: 96px;
+        height: 96px;
+        border-radius: 22px;
+      }
+      #end h1 {
+        font-size: 64px;
+        font-weight: 700;
+        letter-spacing: -0.04em;
+        line-height: 1;
+      }
+      #end p {
+        font-size: 26px;
+        font-weight: 500;
+        letter-spacing: -0.015em;
+        color: var(--muted);
+      }
+      #end small {
+        margin-top: 10px;
+        font-size: 17px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage">
+      <div id="prompt">
+        <div class="label">What should Sharp hide?</div>
+        <div class="field"><span id="typed"></span><span id="caret"></span></div>
+      </div>
+      <div id="caption"></div>
+
+      <div id="bar"><i id="zclose"></i><i id="zsure"></i></div>
+      <div id="ends"><span>0% · surely fine</span><span>100% · surely a match</span></div>
+      <div id="legend">
+        <span style="--c: var(--kept)">Kept</span>
+        <span style="--c: var(--close)">Close call · hidden, one tap to peek</span>
+        <span style="--c: var(--danger)">Hidden</span>
+      </div>
+      <div id="cards"></div>
+      <div class="handle" id="hHide"></div>
+      <div class="handle" id="hLine"></div>
+      <div class="tag" id="tHide"></div>
+      <div class="tag" id="tLine"></div>
+
+      <div id="end">
+        <img src="../icons/icon128.png" alt="" />
+        <h1>Sharp</h1>
+        <p>Your timeline, filtered in your own words.</p>
+        <small>Free · open source · your own key · github.com/tshmieldev/sharp</small>
+      </div>
+    </div>
+
+    <script>
+      const DURATION = 17.5;
+      const FILTER = 'no crypto shilling';
+      const BAR = { x: 90, y: 507, w: 1100 };
+      const LANES = [216, 336];
+      const POSTS = [
+        {
+          who: 'mira',
+          tone: '#5ec4a8',
+          text: 'My cat learned to open doors. We are doomed.',
+          score: 2,
+        },
+        {
+          who: 'devon',
+          tone: '#e0a54e',
+          text: 'Shipped my side project today. Link below.',
+          score: 7,
+        },
+        { who: 'onchain', tone: '#6f8cff', text: 'Bitcoin ETF flows, explained.', score: 55 },
+        {
+          who: 'solmaxi',
+          tone: '#c36bff',
+          text: 'is $SOL a buy right now? honest question',
+          score: 60,
+        },
+        {
+          who: 'alpha_calls',
+          tone: '#ff8a5c',
+          text: '10x your bag this week. DM me 🚀',
+          score: 96,
+        },
+        {
+          who: 'pepe_king',
+          tone: '#7bd65a',
+          text: 'gm. $PEPE to the moon 🌕 not financial advice',
+          score: 99,
+        },
+      ];
+
+      const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+      const out = (x) => 1 - Math.pow(1 - x, 4);
+      const inout = (x) => (x < 0.5 ? 8 * x ** 4 : 1 - Math.pow(-2 * x + 2, 4) / 2);
+      const p = (t, a, b, ease = out) => ease(clamp((t - a) / (b - a)));
+      const lerp = (a, b, k) => a + (b - a) * k;
+      const xOf = (score) => BAR.x + (score / 100) * BAR.w;
+      const $ = (id) => document.getElementById(id);
+
+      const cards = POSTS.map((post, index) => {
+        const root = document.createElement('div');
+        root.innerHTML = `
+          <div class="stem"></div><div class="dot"></div>
+          <div class="card">
+            <div class="face post">
+              <div class="who"><i style="--tone:${post.tone}"></i>@${post.who}<span class="score"></span></div>
+              <div class="text">${post.text}</div>
+            </div>
+            <div class="face banner"><b>@${post.who}</b><span class="sure"></span><u>Show</u></div>
+          </div>`;
+        for (const child of [...root.children]) {
+          child.style.position = 'absolute';
+          $('cards').append(child);
+        }
+        const [stem, dot, card] = [...$('cards').children].slice(-3);
+        return { post, lane: index % 2, stem, dot, card };
+      });
+
+      const CAPTIONS = [
+        [0.3, 3.3, 'Say it in your own words.'],
+        [3.6, 7.2, 'Every post gets a score.'],
+        [7.5, 10.2, 'You choose <em>where hiding starts</em>.'],
+        [10.5, 14.0, 'And what counts as a <em>close call</em>.'],
+      ];
+
+      function seek(t) {
+        // Scene 1: typing, then the field shrinks into the corner.
+        const typed = Math.round(lerp(0, FILTER.length, clamp((t - 0.7) / 1.7)));
+        $('typed').textContent = FILTER.slice(0, typed);
+        $('caret').style.opacity = t < 2.6 ? (Math.floor(t * 2.2) % 2 ? 0.25 : 1) : 0;
+        const dock = p(t, 3.0, 3.8, inout);
+        const scale = lerp(1, 0.36, dock);
+        $('prompt').style.transform =
+          `translate(${lerp(260, 40, dock)}px, ${lerp(262, 22, dock)}px) scale(${scale})`;
+        $('prompt').style.opacity = p(t, 0.1, 0.6) * (1 - p(t, 14.2, 14.7));
+        $('prompt').querySelector('.label').style.opacity = 1 - dock;
+
+        // Captions crossfade.
+        let caption = '';
+        let alpha = 0;
+        for (const [from, to, html] of CAPTIONS) {
+          if (t >= from - 0.01 && t <= to + 0.35) {
+            caption = html;
+            alpha = p(t, from, from + 0.4) * (1 - p(t, to, to + 0.35));
+          }
+        }
+        if ($('caption').innerHTML !== caption) $('caption').innerHTML = caption;
+        $('caption').style.opacity = alpha;
+        $('caption').style.transform = `translateY(${lerp(10, 0, alpha)}px)`;
+        if (t < 3.4) $('caption').style.top = '470px';
+        else $('caption').style.top = '116px';
+
+        // The lines. "Hide from" is dragged down from the top of the scale; the
+        // close-call line is then pulled away from it.
+        const hide = t < 7.6 ? 101 : lerp(100, 50, p(t, 7.9, 9.4, inout));
+        const line = Math.max(hide, lerp(50, 80, p(t, 10.9, 12.3, inout)));
+        const world = p(t, 3.6, 4.2) * (1 - p(t, 14.2, 14.7));
+        $('bar').style.opacity = world;
+        $('ends').style.opacity = world * 0.9;
+        $('zclose').style.clipPath =
+          `inset(0 ${100 - Math.min(line, 100)}% 0 ${Math.min(hide, 100)}%)`;
+        $('zsure').style.clipPath = `inset(0 0 0 ${Math.min(line, 100)}%)`;
+        $('legend').style.opacity = p(t, 11.2, 11.8) * (1 - p(t, 14.2, 14.7));
+
+        const showHide = p(t, 7.5, 7.9) * (1 - p(t, 14.2, 14.7));
+        const split = p(t, 10.7, 11.1);
+        place($('hHide'), xOf(Math.min(hide, 100)), showHide);
+        place($('hLine'), xOf(line), showHide * split);
+        tag(
+          $('tHide'),
+          xOf(Math.min(hide, 100)),
+          `Hide from ${Math.round(Math.min(hide, 100))}%`,
+          showHide,
+        );
+        tag($('tLine'), xOf(line), `Sure from ${Math.round(line)}%`, showHide * split);
+
+        // Posts.
+        cards.forEach(({ post, lane, stem, dot, card }, index) => {
+          const born = 3.9 + index * 0.42;
+          const appear = p(t, born, born + 0.6) * (1 - p(t, 14.2, 14.7));
+          const score = post.score;
+          const shown = Math.round(score * p(t, born + 0.1, born + 1.0));
+          const x = xOf(score);
+          const cx = clamp(x, 40 + 160, 1240 - 160);
+          const top = LANES[lane];
+
+          const hidden = clamp((score - hide) / 3 + 0.5);
+          const close = hidden * clamp((line - score) / 3 + 0.5);
+
+          card.style.transform = `translate(${cx - 160}px, ${top + lerp(14, 0, appear)}px)`;
+          card.style.opacity = appear;
+          const postFace = card.querySelector('.post');
+          const banner = card.querySelector('.banner');
+          postFace.style.opacity = 1 - hidden;
+          postFace.style.transform = `scale(${lerp(1, 0.97, hidden)})`;
+          banner.style.opacity = hidden;
+          banner.style.background =
+            close > 0.5
+              ? 'color-mix(in srgb, var(--accent) 14%, var(--surface))'
+              : 'var(--surface)';
+          banner.style.borderColor =
+            close > 0.5 ? 'color-mix(in srgb, var(--accent) 45%, var(--line))' : 'var(--line)';
+          const sure = card.querySelector('.sure');
+          sure.textContent = `Hidden · ${close > 0.5 ? 'only ' : ''}${Math.round(score)}% sure`;
+          sure.style.color = close > 0.5 ? 'var(--accent)' : 'var(--muted)';
+          card.querySelector('.score').textContent = `${shown}%`;
+          const cardBottom = top + lerp(96, 70, hidden);
+          stem.style.transform = `translate(${x}px, ${cardBottom}px) scaleY(${(BAR.y - cardBottom) * appear})`;
+          stem.style.height = '1px';
+          stem.style.opacity = appear * 0.9;
+          dot.style.transform = `translate(${x}px, ${BAR.y}px) scale(${appear})`;
+          dot.style.background =
+            hidden > 0.5 ? (close > 0.5 ? 'var(--accent)' : 'var(--danger)') : 'var(--text)';
+        });
+
+        // End card.
+        const end = p(t, 14.6, 15.4);
+        $('end').style.opacity = end;
+        $('end').style.transform = `translateY(${lerp(16, 0, end)}px)`;
+      }
+
+      function place(node, x, alpha, dy = 0) {
+        node.style.transform = `translate(${x}px, ${dy}px) scale(${lerp(0.4, 1, alpha)})`;
+        node.style.opacity = alpha;
+      }
+      function tag(node, x, text, alpha) {
+        node.textContent = text;
+        const width = node.offsetWidth;
+        node.style.transform = `translate(${clamp(x - width / 2, 40, 1240 - width)}px, 0) scale(${lerp(0.7, 1, alpha)})`;
+        node.style.opacity = alpha;
+      }
+
+      window.seek = seek;
+      window.DURATION = DURATION;
+      seek(0);
+      // Opened by hand, it simply plays on a loop; a recorder passes ?still.
+      if (!location.search.includes('still')) {
+        const start = performance.now();
+        const tick = (now) => {
+          seek(((now - start) / 1000) % (DURATION + 1));
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Sharp promo: what Jev is, then Sharp</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* A 1080x1080 stage. Nothing here runs on a clock: `seek(t)` draws the
+         frame for second `t`, so a recorder can step through it frame by frame
+         and a browser can just play it. Measured, not claimed: the same sixteen posts through four models, how long
+         each took and what it cost; then what only the classifier gives back; then
+         Sharp using it. */
+      :root {
+        --bg: #0b0b10;
+        --surface: #16161e;
+        --line: #2a2a35;
+        --text: #eeecf6;
+        --muted: #9a98ae;
+        --accent: #8b7dff;
+        --danger: #ff6f88;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+      html,
+      body {
+        width: 1080px;
+        height: 1080px;
+        /* The backdrop of scripts/promo.mjs and the 0.2.0 video: a violet glow
+           falling from the top of a near-black ground. */
+        background:
+          radial-gradient(85% 85% at 50% 0%, rgb(109 91 255 / 0.45), rgb(109 91 255 / 0)), var(--bg);
+        color: var(--text);
+        font-family: 'Schibsted Grotesk', system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      #stage {
+        position: relative;
+        width: 1080px;
+        height: 1080px;
+      }
+      #stage > *,
+      #in > *,
+      #bars > *,
+      #feed > * {
+        position: absolute;
+        will-change: transform, opacity;
+        /* Hidden until `seek` shows it, so a script that has not run yet can never
+           leave every beat stacked under the end card. */
+        opacity: 0;
+      }
+
+      /* The three containers only hold things; what is inside them is what fades. */
+      #stage > #in,
+      #stage > #bars,
+      #stage > #feed {
+        opacity: 1;
+      }
+      #caption {
+        left: 0;
+        top: 64px;
+        width: 1080px;
+        padding: 0 80px;
+        text-align: center;
+        font-size: 50px;
+        font-weight: 700;
+        letter-spacing: -0.035em;
+        line-height: 1.1;
+      }
+      #caption em {
+        font-style: normal;
+        color: var(--accent);
+      }
+
+      /* Beat 1: the same sixteen posts, and who gets them. */
+      .chip {
+        left: 0;
+        top: 0;
+        width: 200px;
+        height: 44px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 12px;
+        border: 1.5px solid var(--line);
+        border-radius: 12px;
+        background: var(--surface);
+      }
+      .chip i {
+        flex: none;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: var(--tone);
+      }
+      .chip u {
+        height: 8px;
+        border-radius: 9px;
+        background: #3a3a49;
+      }
+
+      /* Beats 2 and 3: one measure per chart, one bar per model, longest last.
+         The classifier's bar takes the accent; the rest stay neutral, and every
+         bar is named and valued in ink, so colour never carries identity alone. */
+      .bar {
+        left: 110px;
+        top: 0;
+        width: 860px;
+        height: 118px;
+      }
+      .bar .name {
+        position: absolute;
+        left: 0;
+        top: 0;
+        font-size: 30px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+      }
+      .bar .value {
+        position: absolute;
+        right: 0;
+        top: -6px;
+        font-size: 40px;
+        font-weight: 800;
+        letter-spacing: -0.035em;
+        font-variant-numeric: tabular-nums;
+      }
+      .bar .track {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 56px;
+        height: 22px;
+        border-radius: 6px;
+        background: rgb(255 255 255 / 0.06);
+      }
+      .bar .fill {
+        position: absolute;
+        inset: 0;
+        border-radius: 6px;
+        background: #6f6d84;
+      }
+      .bar.jev .fill {
+        background: var(--accent);
+      }
+      .bar.jev .name {
+        color: var(--accent);
+      }
+      #source {
+        left: 0;
+        top: 1000px;
+        width: 1080px;
+        text-align: center;
+        font-size: 22px;
+        font-weight: 500;
+        color: var(--muted);
+      }
+
+      /* Beat 4: a word against a number. */
+      .answer {
+        top: 330px;
+        width: 440px;
+        height: 520px;
+        padding: 36px;
+        border: 1.5px solid var(--line);
+        border-radius: 28px;
+        background: var(--surface);
+        text-align: center;
+      }
+      #answerChat {
+        left: 80px;
+      }
+      #answerJev {
+        left: 560px;
+        border-color: var(--accent);
+      }
+      .answer h3 {
+        font-size: 30px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        color: var(--muted);
+      }
+      #answerJev h3 {
+        color: var(--accent);
+      }
+      .answer .said {
+        margin-top: 92px;
+        font-size: 120px;
+        font-weight: 800;
+        letter-spacing: -0.05em;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+      }
+      .answer .meter {
+        position: relative;
+        height: 14px;
+        margin: 40px 20px 0;
+        border-radius: 99px;
+        background: var(--line);
+      }
+      .answer .meter s {
+        position: absolute;
+        inset: 0;
+        border-radius: 99px;
+        background: var(--danger);
+      }
+      .answer p {
+        margin-top: 34px;
+        font-size: 28px;
+        font-weight: 500;
+        line-height: 1.3;
+        color: var(--muted);
+      }
+
+      /* Sharp: the feed. */
+      #filter {
+        left: 250px;
+        top: 214px;
+        width: 580px;
+        padding: 16px 26px;
+        border: 1.5px solid var(--line);
+        border-radius: 16px;
+        background: var(--surface);
+        font-size: 30px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        text-align: center;
+      }
+      .row {
+        left: 70px;
+        top: 0;
+        width: 790px;
+        border: 1.5px solid var(--line);
+        border-radius: 18px;
+        background: var(--surface);
+        font-family: -apple-system, system-ui, sans-serif;
+      }
+      .row .full,
+      .row .gone {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 0 24px;
+      }
+      .row i {
+        flex: none;
+        border-radius: 50%;
+        background: var(--tone);
+        width: 52px;
+        height: 52px;
+      }
+      .row b {
+        display: block;
+        font-weight: 600;
+        color: var(--muted);
+        font-size: 18px;
+      }
+      .row span {
+        display: block;
+        margin-top: 1px;
+        font-size: 30px;
+        font-weight: 500;
+        letter-spacing: -0.01em;
+        white-space: nowrap;
+      }
+      .row .gone {
+        gap: 13px;
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--muted);
+      }
+      .row .gone svg {
+        flex: none;
+        width: 25px;
+        height: 25px;
+      }
+      .pct {
+        left: 872px;
+        top: 0;
+        width: 138px;
+        text-align: right;
+        font-size: 46px;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+        font-variant-numeric: tabular-nums;
+      }
+
+      #end {
+        inset: 0;
+        z-index: 10;
+        display: grid;
+        place-content: center;
+        justify-items: center;
+        gap: 20px;
+        text-align: center;
+      }
+      #end img {
+        width: 140px;
+        height: 140px;
+        border-radius: 32px;
+      }
+      #end h1 {
+        font-size: 96px;
+        font-weight: 800;
+        letter-spacing: -0.04em;
+        line-height: 1;
+      }
+      #end p {
+        max-width: 800px;
+        font-size: 38px;
+        font-weight: 500;
+        letter-spacing: -0.02em;
+        color: var(--muted);
+      }
+      #end a {
+        margin-top: 10px;
+        color: var(--accent);
+        font-size: 30px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      #end small {
+        margin-top: 26px;
+        font-size: 24px;
+        font-weight: 500;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage">
+      <div id="caption"></div>
+
+      <div id="in"></div>
+      <div id="bars"></div>
+      <div id="source">16 posts per request · median of 12 runs each · via OpenRouter</div>
+
+      <div class="answer" id="answerChat">
+        <h3>A chat model says</h3>
+        <div class="said">hide</div>
+        <p>A verdict.<br />Take it or leave it.</p>
+      </div>
+      <div class="answer" id="answerJev">
+        <h3>Jev says</h3>
+        <div class="said">97%</div>
+        <div class="meter"><s></s></div>
+        <p>How sure it is.<br />You choose the line.</p>
+      </div>
+
+      <div id="filter">no crypto shilling</div>
+      <div id="feed"></div>
+
+      <div id="end">
+        <img src="../icons/icon128.png" alt="" />
+        <h1>Sharp</h1>
+        <p>Control your feed, not the other way around.</p>
+        <a>github.com/tshmieldev/sharp</a>
+        <small>Free · open source · classifier: Jev by TypeSafe AI</small>
+      </div>
+    </div>
+
+    <script>
+      const DURATION = 34;
+      // Beats, in seconds.
+      const SAME = [0, 4.6];
+      const SPEED = [4.6, 12.2];
+      const COST = [12.2, 18.4];
+      const SURE = [18.4, 23.6];
+      const SHARP = [23.6, 29.4];
+      const END = 29.6;
+
+      // Measured through Sharp's own code on OpenRouter: the same 16 posts in one
+      // request, 12 runs per model. Seconds are medians; cost is per 1,000 posts.
+      const MODELS = [
+        { name: 'Jev', jev: true, seconds: 0.36, cents: 0.9 },
+        { name: 'Gemma 4 31B', seconds: 1.79, cents: 1.9 },
+        { name: 'Claude Haiku 4.5', seconds: 2.86, cents: 24.8 },
+        { name: 'Gemini 2.5 Flash', seconds: 3.28, cents: 13.2 },
+      ];
+      const TONES = [
+        '#5ec4a8',
+        '#7bd65a',
+        '#e0a54e',
+        '#6f8cff',
+        '#ff8a5c',
+        '#c36bff',
+        '#4fb6e8',
+        '#f0c24b',
+      ];
+      const FEED = [
+        { who: 'mira', tone: '#5ec4a8', text: 'My cat learned to open doors.', score: 15 },
+        { who: 'pepe_king', tone: '#7bd65a', text: '$PEPE to the moon 🚀', score: 94, goes: 26.0 },
+        { who: 'devon', tone: '#e0a54e', text: 'Shipped my side project today.', score: 23 },
+        {
+          who: 'alpha_calls',
+          tone: '#ff8a5c',
+          text: '10x your bag. DM me.',
+          score: 96,
+          goes: 26.6,
+        },
+        {
+          who: 'kate_dev',
+          tone: '#4fb6e8',
+          text: 'TypeScript caught a 2-year-old bug.',
+          score: 17,
+        },
+        {
+          who: 'airdrops',
+          tone: '#c36bff',
+          text: 'FREE $ZETA for 1000 wallets',
+          score: 95,
+          goes: 27.2,
+        },
+      ];
+      const EYE_OFF =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>';
+
+      const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+      const out = (x) => 1 - Math.pow(1 - x, 4);
+      const inout = (x) => (x < 0.5 ? 8 * x ** 4 : 1 - Math.pow(-2 * x + 2, 4) / 2);
+      const p = (t, a, b, ease = out) => ease(clamp((t - a) / (b - a)));
+      const lerp = (a, b, k) => a + (b - a) * k;
+      const span = (t, [a, b], fade = 0.4) => p(t, a, a + fade) * (1 - p(t, b - fade, b));
+      const $ = (id) => document.getElementById(id);
+
+      const chips = Array.from({ length: 16 }, (_, index) => {
+        const chip = document.createElement('div');
+        chip.className = 'chip';
+        chip.innerHTML = `<i style="--tone:${TONES[index % TONES.length]}"></i><u style="width:${70 + ((index * 37) % 70)}px"></u>`;
+        $('in').append(chip);
+        return chip;
+      });
+      const bars = MODELS.map((model) => {
+        const node = document.createElement('div');
+        node.className = `bar${model.jev ? ' jev' : ''}`;
+        node.innerHTML = `<span class="name"></span><span class="value"></span><div class="track"><div class="fill"></div></div>`;
+        $('bars').append(node);
+        return { model, node };
+      });
+      const rows = FEED.map((post) => {
+        const node = document.createElement('div');
+        node.className = 'row';
+        node.innerHTML = `
+          <div class="full"><i style="--tone:${post.tone}"></i><div><b>@${post.who}</b><span>${post.text}</span></div></div>
+          <div class="gone">${EYE_OFF}@${post.who} · Hidden</div>`;
+        const pct = document.createElement('div');
+        pct.className = 'pct';
+        $('feed').append(node, pct);
+        return { post, node, pct };
+      });
+
+      const CAPTIONS = [
+        [SAME, 'The same 16 posts.<br /><em>Four models.</em>'],
+        [SPEED, 'How long<br />for <em>all sixteen</em>?'],
+        [COST, 'What <em>1,000 posts</em><br />cost you.'],
+        [SURE, 'And only one<br />says <em>how sure</em> it is.'],
+        [SHARP, 'Sharp puts that<br />on <em>your timeline</em>.'],
+      ];
+      const cents = (value) => (value < 10 ? `${value.toFixed(1)}¢` : `${Math.round(value)}¢`);
+
+      function seek(t) {
+        let html = '';
+        let alpha = 0;
+        for (const [beat, text] of CAPTIONS) {
+          if (t >= beat[0] && t <= beat[1]) {
+            html = text;
+            alpha = span(t, [beat[0] + 0.15, beat[1]], 0.35);
+          }
+        }
+        if ($('caption').innerHTML !== html) $('caption').innerHTML = html;
+        $('caption').style.opacity = alpha;
+
+        // Beat 1: sixteen posts, then the four names they go to.
+        const same = 1 - p(t, SAME[1] - 0.4, SAME[1]);
+        chips.forEach((chip, index) => {
+          const born = 0.5 + index * 0.05;
+          const appear = p(t, born, born + 0.45);
+          chip.style.transform = `translate(${110 + (index % 4) * 220}px, ${250 + Math.floor(index / 4) * 60 + lerp(14, 0, appear)}px)`;
+          chip.style.opacity = appear * same;
+        });
+
+        // Beats 2 and 3 share the bars. In the speed chart each bar grows in
+        // real time: a second on screen is a second on the clock.
+        const speeding = t < COST[0];
+        const chart = Math.max(span(t, [SAME[0] + 2.0, SPEED[1]], 0.4), span(t, COST, 0.4));
+        const order = speeding
+          ? MODELS.map((_, index) => index)
+          : [...MODELS.keys()].sort((a, b) => MODELS[a].cents - MODELS[b].cents);
+        const started = SPEED[0] + 1.2;
+        const longest = Math.max(...MODELS.map((model) => model.seconds));
+        const dearest = Math.max(...MODELS.map((model) => model.cents));
+        bars.forEach(({ model, node }, index) => {
+          const slot = order.indexOf(index);
+          // Before the race, the names sit under the chips as a plain list.
+          const listed = t < SPEED[0];
+          const top = listed ? 560 + slot * 96 : 290 + slot * 168;
+          const born = listed ? 2.2 + slot * 0.18 : 0;
+          node.style.transform = `translate(0, ${top}px)`;
+          node.style.opacity = chart * (listed ? p(t, born, born + 0.5) : 1);
+          node.querySelector('.name').textContent = model.name;
+          const track = node.querySelector('.track');
+          const value = node.querySelector('.value');
+          track.style.opacity = listed ? 0 : 1;
+          let share = 0;
+          let label = '';
+          if (speeding && !listed) {
+            const elapsed = clamp(t - started, 0, model.seconds);
+            share = elapsed / longest;
+            label = t < started ? '' : `${elapsed.toFixed(2)} s`;
+            value.style.opacity = elapsed >= model.seconds ? 1 : 0.55;
+          } else if (!speeding) {
+            const grow = p(t, COST[0] + 0.9 + slot * 0.12, COST[0] + 2.0 + slot * 0.12, inout);
+            share = (model.cents / dearest) * grow;
+            label = grow > 0.02 ? cents(model.cents * grow) : '';
+            value.style.opacity = 1;
+          }
+          value.textContent = label;
+          node.querySelector('.fill').style.clipPath =
+            `inset(0 ${100 - Math.max(share * 100, share > 0 ? 0.6 : 0)}% 0 0 round 6px)`;
+        });
+        $('source').style.opacity =
+          Math.max(span(t, [SPEED[0] + 0.6, SPEED[1]], 0.4), span(t, COST, 0.4)) * 0.9;
+
+        // Beat 4: a word against a number.
+        const sure = span(t, SURE, 0.4);
+        $('answerChat').style.opacity = sure * p(t, SURE[0] + 0.5, SURE[0] + 1.0);
+        $('answerJev').style.opacity = sure * p(t, SURE[0] + 1.5, SURE[0] + 2.0);
+        $('answerJev').querySelector('s').style.clipPath =
+          `inset(0 ${100 - 97 * p(t, SURE[0] + 1.8, SURE[0] + 2.8)}% 0 0 round 99px)`;
+
+        // Beat 5: Sharp, the same numbers on a feed, doing something.
+        const leave = 1 - p(t, SHARP[1] - 0.4, SHARP[1]);
+        $('filter').style.opacity = p(t, SHARP[0] + 0.2, SHARP[0] + 0.7) * leave;
+        let y = 318;
+        rows.forEach(({ post, node, pct }, index) => {
+          const born = SHARP[0] + 0.5 + index * 0.16;
+          const appear = p(t, born, born + 0.5) * leave;
+          const hidden = post.goes === undefined ? 0 : p(t, post.goes, post.goes + 0.7, inout);
+          const height = lerp(98, 58, hidden);
+          node.style.height = `${height}px`;
+          node.style.transform = `translate(0, ${y + lerp(16, 0, appear)}px)`;
+          node.style.opacity = appear;
+          node.querySelector('.full').style.opacity = 1 - clamp(hidden * 1.8);
+          node.querySelector('.gone').style.opacity = clamp(hidden * 2 - 1);
+          pct.textContent = `${Math.round(post.score * p(t, born + 0.2, born + 0.9))}%`;
+          pct.style.color = hidden > 0.5 ? 'var(--danger)' : 'var(--muted)';
+          pct.style.transform = `translate(0, ${y + height / 2 - 30 + lerp(16, 0, appear)}px)`;
+          pct.style.opacity = appear;
+          y += height + 13;
+        });
+
+        const end = p(t, END, END + 0.8);
+        $('end').style.display = end > 0 ? 'grid' : 'none';
+        $('end').style.opacity = end;
+        $('end').style.transform = `translateY(${lerp(16, 0, end)}px)`;
+      }
+
+      window.seek = seek;
+      window.DURATION = DURATION;
+      seek(0);
+      // Opened by hand, it simply plays on a loop; a recorder passes ?still.
+      if (!location.search.includes('still')) {
+        const start = performance.now();
+        const tick = (now) => {
+          seek(((now - start) / 1000) % (DURATION + 1));
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }
+    </script>
+  </body>
+</html>
