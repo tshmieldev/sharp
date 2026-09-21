@@ -17,9 +17,9 @@ Describe what you want to see — or never see again — in plain language.
 <br>
 <a href="https://ko-fi.com/tshmieldev"><img height="36" src="https://storage.ko-fi.com/cdn/kofi3.png?v=6" alt="Buy me a coffee at ko-fi.com"></a>
 <br><br>
-<img src="store/promo.gif" width="600" alt="Typing a filter into Sharp, then posts collapsing on the X timeline">
+<img src="store/promo.gif" width="600" alt="Typing “no crypto shilling” into Sharp; each post on a feed gets a score, and as the “Hide from” and “Sure from” sliders move, the crypto posts fold into Hidden rows">
 
-<sub><a href="store/promo-0.2.0-square.mp4">Square</a> · <a href="store/promo-0.2.0.mp4">Widescreen</a> full quality</sub>
+<sub><a href="store/promo-0.5.1-square.mp4">Square</a> · <a href="store/promo-0.5.1.mp4">Widescreen</a> full quality</sub>
 
 </div>
 

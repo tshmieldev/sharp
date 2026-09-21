@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Sharp promo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* A 1280x720 stage. Nothing here runs on a clock: `seek(t)` draws the
+         frame for second `t`, so a recorder can step through it frame by frame
+         and a browser can just play it. Three beats, almost nothing to read:
+         type it, watch it go, set how strict. */
+      :root {
+        --bg: #0b0b10;
+        --surface: #16161e;
+        --line: #2a2a35;
+        --text: #eeecf6;
+        --muted: #9a98ae;
+        --accent: #8b7dff;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+      html,
+      body {
+        width: 1280px;
+        height: 720px;
+        background: var(--bg);
+        color: var(--text);
+        font-family: 'Schibsted Grotesk', system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      #stage {
+        position: relative;
+        width: 1280px;
+        height: 720px;
+      }
+      #stage > *,
+      #feed > * {
+        position: absolute;
+        will-change: transform, opacity;
+      }
+
+      #prompt {
+        left: 0;
+        top: 0;
+        width: 760px;
+        transform-origin: 50% 0;
+        padding: 26px 32px;
+        border: 1.5px solid var(--line);
+        border-radius: 22px;
+        background: var(--surface);
+        font-size: 42px;
+        font-weight: 600;
+        letter-spacing: -0.025em;
+        white-space: nowrap;
+        box-shadow: 0 24px 60px -30px rgb(0 0 0 / 0.8);
+      }
+      #caret {
+        display: inline-block;
+        width: 3px;
+        height: 44px;
+        margin-left: 3px;
+        vertical-align: -8px;
+        border-radius: 2px;
+        background: var(--accent);
+      }
+
+      /* The feed: big posts, a few words each. A hidden post folds down to a
+         slim row and the feed closes up around it. */
+      .post {
+        left: 230px;
+        top: 0;
+        width: 820px;
+        border: 1.5px solid var(--line);
+        border-radius: 18px;
+        background: var(--surface);
+        font-family: -apple-system, system-ui, sans-serif;
+      }
+      .post .full,
+      .post .gone {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        padding: 0 22px;
+      }
+      .post .full {
+        gap: 16px;
+      }
+      .post i {
+        flex: none;
+        width: 54px;
+        height: 54px;
+        border-radius: 50%;
+        background: var(--tone);
+      }
+      .post b {
+        display: block;
+        font-size: 17px;
+        font-weight: 600;
+        color: var(--muted);
+      }
+      .post span {
+        display: block;
+        margin-top: 2px;
+        font-size: 32px;
+        font-weight: 500;
+        letter-spacing: -0.01em;
+        white-space: nowrap;
+      }
+      .post .gone {
+        gap: 12px;
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--muted);
+      }
+      .post .gone svg {
+        width: 24px;
+        height: 24px;
+      }
+
+      /* One slider. No numbers. */
+      #strict {
+        left: 230px;
+        top: 606px;
+        width: 820px;
+      }
+      #strict .row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 16px;
+        font-size: 23px;
+        font-weight: 600;
+        color: var(--muted);
+      }
+      #strict .row em {
+        font-style: normal;
+        color: var(--text);
+      }
+      #strict .track {
+        position: relative;
+        height: 12px;
+        border-radius: 99px;
+        background: var(--line);
+      }
+      #strict .fill {
+        position: absolute;
+        inset: 0;
+        border-radius: 99px;
+        background: var(--accent);
+      }
+      #strict .knob {
+        position: absolute;
+        left: -17px;
+        top: -11px;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        border: 4px solid var(--bg);
+        background: var(--accent);
+        box-shadow: 0 8px 16px -6px rgb(0 0 0 / 0.8);
+      }
+
+      #end {
+        inset: 0;
+        display: grid;
+        place-content: center;
+        justify-items: center;
+        gap: 20px;
+        text-align: center;
+      }
+      #end img {
+        width: 104px;
+        height: 104px;
+        border-radius: 24px;
+      }
+      #end h1 {
+        font-size: 72px;
+        font-weight: 800;
+        letter-spacing: -0.04em;
+        line-height: 1;
+      }
+      #end p {
+        font-size: 30px;
+        font-weight: 500;
+        letter-spacing: -0.02em;
+        color: var(--muted);
+      }
+      #end small {
+        margin-top: 6px;
+        font-size: 19px;
+        font-weight: 600;
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage">
+      <div id="prompt"><span id="typed"></span><span id="caret"></span></div>
+      <div id="feed"></div>
+      <div id="strict">
+        <div class="row"><span>Relaxed</span><em>How strict?</em><span>Strict</span></div>
+        <div class="track">
+          <div class="fill"></div>
+          <div class="knob"></div>
+        </div>
+      </div>
+      <div id="end">
+        <img src="../icons/icon128.png" alt="" />
+        <h1>Sharp</h1>
+        <p>Your timeline, filtered in your own words.</p>
+        <small>Free · open source · Chrome and Firefox</small>
+      </div>
+    </div>
+
+    <script>
+      const DURATION = 16;
+      const FILTER = 'no crypto shilling';
+      const FEED_TOP = 112;
+      const [TALL, SLIM, GAP] = [104, 52, 13];
+      // `goes`: the second an obvious match is hidden. `at`: how far up the
+      // slider has to be before a borderline post goes too.
+      const POSTS = [
+        { who: 'mira', tone: '#5ec4a8', text: 'My cat learned to open doors.' },
+        { who: 'pepe_king', tone: '#7bd65a', text: '$PEPE to the moon 🚀', goes: 5.7 },
+        { who: 'devon', tone: '#e0a54e', text: 'Shipped my side project today.' },
+        { who: 'alpha_calls', tone: '#ff8a5c', text: '10x your bag. DM me.', goes: 6.5 },
+        { who: 'solmaxi', tone: '#c36bff', text: 'is $SOL a buy right now?', at: 0.55 },
+      ];
+      const EYE_OFF =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>';
+
+      const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+      const out = (x) => 1 - Math.pow(1 - x, 4);
+      const inout = (x) => (x < 0.5 ? 8 * x ** 4 : 1 - Math.pow(-2 * x + 2, 4) / 2);
+      const p = (t, a, b, ease = out) => ease(clamp((t - a) / (b - a)));
+      const lerp = (a, b, k) => a + (b - a) * k;
+      const $ = (id) => document.getElementById(id);
+
+      const nodes = POSTS.map((post) => {
+        const node = document.createElement('div');
+        node.className = 'post';
+        node.innerHTML = `
+          <div class="full"><i style="--tone:${post.tone}"></i><div><b>@${post.who}</b><span>${post.text}</span></div></div>
+          <div class="gone">${EYE_OFF}Hidden</div>`;
+        $('feed').append(node);
+        return node;
+      });
+
+      function seek(t) {
+        // Beat 1: type it. The field then rises to the top and stays.
+        const typed = Math.round(lerp(0, FILTER.length, clamp((t - 0.6) / 1.6)));
+        $('typed').textContent = FILTER.slice(0, typed);
+        $('caret').style.opacity = t < 2.5 ? (Math.floor(t * 2.2) % 2 ? 0.25 : 1) : 0;
+        const dock = p(t, 2.7, 3.5, inout);
+        const leave = 1 - p(t, 13.0, 13.5);
+        $('prompt').style.transform =
+          `translate(260px, ${lerp(300, 22, dock)}px) scale(${lerp(1, 0.58, dock)})`;
+        $('prompt').style.opacity = p(t, 0.1, 0.6) * leave;
+
+        // Beat 3: one slider, dragged up, then eased back a little.
+        const strict =
+          t < 10.9
+            ? lerp(0.3, 0.8, p(t, 9.2, 10.6, inout))
+            : lerp(0.8, 0.42, p(t, 11.3, 12.5, inout));
+        const slider = p(t, 8.3, 8.9) * leave;
+        $('strict').style.opacity = slider;
+        $('strict').style.transform = `translateY(${lerp(14, 0, slider)}px)`;
+        $('strict').querySelector('.fill').style.clipPath =
+          `inset(0 ${(1 - strict) * 100}% 0 0 round 99px)`;
+        $('strict').querySelector('.knob').style.transform = `translateX(${strict * 820}px)`;
+
+        // Beat 2: the feed. Hidden posts fold down and the rest close up.
+        let y = FEED_TOP;
+        nodes.forEach((node, index) => {
+          const post = POSTS[index];
+          const born = 3.5 + index * 0.22;
+          const appear = p(t, born, born + 0.6) * leave;
+          const hidden =
+            post.goes !== undefined
+              ? p(t, post.goes, post.goes + 0.7, inout)
+              : post.at !== undefined
+                ? inout(clamp((strict - post.at) / 0.1 + 0.5))
+                : 0;
+          const flagged =
+            post.goes !== undefined ? p(t, post.goes - 0.5, post.goes - 0.15) * (1 - hidden) : 0;
+          const height = lerp(TALL, SLIM, hidden);
+          node.style.height = `${height}px`;
+          node.style.transform = `translate(0, ${y + lerp(18, 0, appear)}px)`;
+          node.style.opacity = appear;
+          node.style.borderColor = flagged > 0.05 ? 'var(--accent)' : 'var(--line)';
+          node.querySelector('.full').style.opacity = 1 - clamp(hidden * 1.8);
+          node.querySelector('.gone').style.opacity = clamp(hidden * 2 - 1);
+          y += height + GAP;
+        });
+
+        const end = p(t, 13.4, 14.2);
+        $('end').style.opacity = end;
+        $('end').style.transform = `translateY(${lerp(16, 0, end)}px)`;
+      }
+
+      window.seek = seek;
+      window.DURATION = DURATION;
+      seek(0);
+      // Opened by hand, it simply plays on a loop; a recorder passes ?still.
+      if (!location.search.includes('still')) {
+        const start = performance.now();
+        const tick = (now) => {
+          seek(((now - start) / 1000) % (DURATION + 1));
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }
+    </script>
+  </body>
+</html>

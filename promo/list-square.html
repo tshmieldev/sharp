@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Sharp promo: the list and the sliders</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* A 1080x1080 stage, the square cut of list.html. Nothing here runs on a clock: `seek(t)` draws the
+         frame for second `t`, so a recorder can step through it frame by frame
+         and a browser can just play it. A feed with each post's score beside
+         it, and two handles on a bar underneath; the feed folds as they move. */
+      :root {
+        --bg: #0b0b10;
+        --surface: #16161e;
+        --line: #2a2a35;
+        --text: #eeecf6;
+        --muted: #9a98ae;
+        --accent: #8b7dff;
+        --danger: #ff6f88;
+        --kept: #3b3b49;
+        --close: #8a4a5c;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+      html,
+      body {
+        width: 1080px;
+        height: 1080px;
+        /* The backdrop of scripts/promo.mjs and the 0.2.0 video: a violet glow
+           falling from the top of a near-black ground. */
+        background:
+          radial-gradient(85% 85% at 50% 0%, rgb(109 91 255 / 0.45), rgb(109 91 255 / 0)), var(--bg);
+        color: var(--text);
+        font-family: 'Schibsted Grotesk', system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      #stage {
+        position: relative;
+        width: 1080px;
+        height: 1080px;
+      }
+      #stage > *,
+      #feed > * {
+        position: absolute;
+        will-change: transform, opacity;
+      }
+
+      #prompt {
+        left: 0;
+        top: 0;
+        width: 760px;
+        transform-origin: 0 0;
+        padding: 26px 32px;
+        border: 1.5px solid var(--line);
+        border-radius: 22px;
+        background: var(--surface);
+        font-size: 42px;
+        font-weight: 600;
+        letter-spacing: -0.025em;
+        white-space: nowrap;
+        box-shadow: 0 24px 60px -30px rgb(0 0 0 / 0.8);
+      }
+      #caret {
+        display: inline-block;
+        width: 3px;
+        height: 44px;
+        margin-left: 3px;
+        vertical-align: -8px;
+        border-radius: 2px;
+        background: var(--accent);
+      }
+      #caption {
+        left: 0;
+        top: 132px;
+        width: 1080px;
+        text-align: center;
+        font-size: 40px;
+        font-weight: 600;
+        letter-spacing: -0.025em;
+      }
+      #caption em {
+        font-style: normal;
+        color: var(--accent);
+      }
+
+      /* The feed. A hidden post folds to a slim row and the rest close up. */
+      .post {
+        left: 70px;
+        top: 0;
+        width: 790px;
+        border: 1.5px solid var(--line);
+        border-radius: 16px;
+        background: var(--surface);
+        font-family: -apple-system, system-ui, sans-serif;
+      }
+      .post .full,
+      .post .gone {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        padding: 0 24px;
+      }
+      .post .full {
+        gap: 18px;
+      }
+      .post i {
+        flex: none;
+        width: 54px;
+        height: 54px;
+        border-radius: 50%;
+        background: var(--tone);
+      }
+      .post b {
+        display: block;
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--muted);
+      }
+      .post span {
+        display: block;
+        margin-top: 1px;
+        font-size: 31px;
+        font-weight: 500;
+        letter-spacing: -0.01em;
+        white-space: nowrap;
+      }
+      .post .gone {
+        gap: 13px;
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--muted);
+      }
+      .post .gone svg {
+        flex: none;
+        width: 25px;
+        height: 25px;
+      }
+      /* The score, beside its post. */
+      .score {
+        left: 872px;
+        top: 0;
+        width: 138px;
+        text-align: right;
+        font-size: 46px;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+        font-variant-numeric: tabular-nums;
+        color: var(--muted);
+      }
+
+      /* The bar: three zones, each a full-width layer clipped to its span. */
+      #bar {
+        left: 70px;
+        top: 968px;
+        width: 940px;
+        height: 18px;
+        border-radius: 99px;
+        clip-path: inset(0 round 99px);
+        background: var(--kept);
+      }
+      #bar i {
+        position: absolute;
+        inset: 0;
+      }
+      #zclose {
+        background: var(--close);
+      }
+      #zsure {
+        background: var(--danger);
+      }
+      #ends {
+        left: 70px;
+        top: 1000px;
+        width: 940px;
+        display: flex;
+        justify-content: space-between;
+        font-size: 19px;
+        font-weight: 500;
+        color: var(--muted);
+      }
+      .handle {
+        left: -18px;
+        top: 959px;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        border: 3.5px solid var(--bg);
+        background: var(--accent);
+        box-shadow: 0 6px 14px -4px rgb(0 0 0 / 0.7);
+      }
+      .tag {
+        left: 0;
+        top: 908px;
+        transform-origin: 50% 100%;
+        padding: 6px 14px;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #0e0a24;
+        font-size: 20px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+
+      #end {
+        inset: 0;
+        display: grid;
+        place-content: center;
+        justify-items: center;
+        gap: 20px;
+        text-align: center;
+      }
+      #end img {
+        width: 140px;
+        height: 140px;
+        border-radius: 32px;
+      }
+      #end h1 {
+        font-size: 96px;
+        font-weight: 800;
+        letter-spacing: -0.04em;
+        line-height: 1;
+      }
+      #end p {
+        max-width: 800px;
+        font-size: 38px;
+        font-weight: 500;
+        letter-spacing: -0.02em;
+        color: var(--muted);
+      }
+      #end a {
+        margin-top: 10px;
+        color: var(--accent);
+        font-size: 30px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      #end small {
+        margin-top: 6px;
+        font-size: 24px;
+        font-weight: 600;
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage">
+      <div id="prompt"><span id="typed"></span><span id="caret"></span></div>
+      <div id="caption"></div>
+      <div id="feed"></div>
+      <div id="bar"><i id="zclose"></i><i id="zsure"></i></div>
+      <div id="ends"><span>0%</span><span>100% sure it matches</span></div>
+      <div class="handle" id="hHide"></div>
+      <div class="handle" id="hLine"></div>
+      <div class="tag" id="tHide"></div>
+      <div class="tag" id="tLine"></div>
+      <div id="end">
+        <img src="../icons/icon128.png" alt="" />
+        <h1>Sharp</h1>
+        <p>Control your feed, not the other way around.</p>
+        <a>github.com/tshmieldev/sharp</a>
+      </div>
+    </div>
+
+    <script>
+      const DURATION = 26;
+      const FILTER = 'no crypto shilling';
+      const FEED_TOP = 208;
+      const [TALL, SLIM, GAP] = [98, 58, 13];
+      const BAR = { x: 70, w: 940 };
+      const POSTS = [
+        { who: 'mira', tone: '#5ec4a8', text: 'My cat learned to open doors.', score: 2 },
+        { who: 'pepe_king', tone: '#7bd65a', text: '$PEPE to the moon 🚀', score: 99 },
+        { who: 'devon', tone: '#e0a54e', text: 'Shipped my side project today.', score: 7 },
+        { who: 'onchain', tone: '#6f8cff', text: 'Bitcoin ETF flows, explained.', score: 55 },
+        { who: 'alpha_calls', tone: '#ff8a5c', text: '10x your bag. DM me.', score: 96 },
+        { who: 'solmaxi', tone: '#c36bff', text: 'is $SOL a buy right now?', score: 62 },
+      ];
+      const EYE_OFF =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>';
+
+      const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+      const out = (x) => 1 - Math.pow(1 - x, 4);
+      const inout = (x) => (x < 0.5 ? 8 * x ** 4 : 1 - Math.pow(-2 * x + 2, 4) / 2);
+      const p = (t, a, b, ease = out) => ease(clamp((t - a) / (b - a)));
+      const lerp = (a, b, k) => a + (b - a) * k;
+      const xOf = (score) => BAR.x + (score / 100) * BAR.w;
+      const $ = (id) => document.getElementById(id);
+
+      const rows = POSTS.map((post) => {
+        const node = document.createElement('div');
+        node.className = 'post';
+        node.innerHTML = `
+          <div class="full"><i style="--tone:${post.tone}"></i><div><b>@${post.who}</b><span>${post.text}</span></div></div>
+          <div class="gone">${EYE_OFF}<span class="why"></span></div>`;
+        const score = document.createElement('div');
+        score.className = 'score';
+        $('feed').append(node, score);
+        return { post, node, score, why: node.querySelector('.why') };
+      });
+      // The `.gone` label is a span too; keep it the row's size, not a post's.
+      for (const { why } of rows)
+        Object.assign(why.style, { fontSize: '22px', marginTop: '0', fontWeight: '600' });
+
+      const CAPTIONS = [
+        [3.7, 9.7, 'Every post gets a score.'],
+        [10.1, 13.0, 'You choose <em>where hiding starts</em>.'],
+        [13.4, 16.9, 'And what counts as a <em>close call</em>.'],
+      ];
+
+      function seek(t) {
+        // Type it. The field then shrinks into the top-left corner and stays.
+        const typed = Math.round(lerp(0, FILTER.length, clamp((t - 0.6) / 1.6)));
+        $('typed').textContent = FILTER.slice(0, typed);
+        $('caret').style.opacity = t < 2.5 ? (Math.floor(t * 2.2) % 2 ? 0.25 : 1) : 0;
+        const dock = p(t, 2.7, 3.5, inout);
+        const leave = 1 - p(t, 17.2, 17.7);
+        $('prompt').style.transform =
+          `translate(${lerp(160, 312, dock)}px, ${lerp(470, 40, dock)}px) scale(${lerp(1, 0.6, dock)})`;
+        $('prompt').style.opacity = p(t, 0.1, 0.6) * leave;
+
+        let caption = '';
+        let alpha = 0;
+        for (const [from, to, html] of CAPTIONS) {
+          if (t >= from - 0.01 && t <= to + 0.35) {
+            caption = html;
+            alpha = p(t, from, from + 0.4) * (1 - p(t, to, to + 0.35));
+          }
+        }
+        if ($('caption').innerHTML !== caption) $('caption').innerHTML = caption;
+        $('caption').style.opacity = alpha;
+
+        // The two lines. "Hide from" is dragged down from the top of the scale;
+        // the close-call line is then pulled away from it.
+        const hide = t < 10.2 ? 101 : lerp(100, 50, p(t, 10.5, 12.2, inout));
+        const line = Math.max(hide, lerp(50, 80, p(t, 13.8, 15.4, inout)));
+        const world = p(t, 9.9, 10.4) * leave;
+        $('bar').style.opacity = world;
+        $('ends').style.opacity = world * 0.9;
+        $('zclose').style.clipPath =
+          `inset(0 ${100 - Math.min(line, 100)}% 0 ${Math.min(hide, 100)}%)`;
+        $('zsure').style.clipPath = `inset(0 0 0 ${Math.min(line, 100)}%)`;
+        const split = p(t, 13.6, 14.0);
+        place($('hHide'), xOf(Math.min(hide, 100)), world);
+        place($('hLine'), xOf(line), world * split);
+        tag(
+          $('tHide'),
+          xOf(Math.min(hide, 100)),
+          `Hide from ${Math.round(Math.min(hide, 100))}%`,
+          world,
+        );
+        tag($('tLine'), xOf(line), `Sure from ${Math.round(line)}%`, world * split);
+
+        // The feed follows the lines.
+        let y = FEED_TOP;
+        rows.forEach(({ post, node, score, why }, index) => {
+          const born = 3.6 + index * 0.55;
+          const appear = p(t, born, born + 0.6) * leave;
+          const hidden = inout(clamp((post.score - hide) / 4 + 0.5));
+          const close = hidden > 0.5 && post.score < line - 0.5;
+          const height = lerp(TALL, SLIM, hidden);
+          node.style.height = `${height}px`;
+          node.style.transform = `translate(0, ${y + lerp(16, 0, appear)}px)`;
+          node.style.opacity = appear;
+          node.style.background = close
+            ? 'color-mix(in srgb, var(--accent) 13%, var(--surface))'
+            : 'var(--surface)';
+          node.style.borderColor = close
+            ? 'color-mix(in srgb, var(--accent) 45%, var(--line))'
+            : 'var(--line)';
+          node.querySelector('.full').style.opacity = 1 - clamp(hidden * 1.8);
+          const gone = node.querySelector('.gone');
+          gone.style.opacity = clamp(hidden * 2 - 1);
+          gone.style.color = close ? 'var(--accent)' : 'var(--muted)';
+          why.textContent = close ? `@${post.who} · Hidden, close call` : `@${post.who} · Hidden`;
+
+          const shown = Math.round(post.score * p(t, born + 0.2, born + 1.1));
+          score.textContent = `${shown}%`;
+          score.style.transform = `translate(0, ${y + height / 2 - 30 + lerp(16, 0, appear)}px)`;
+          score.style.opacity = appear;
+          score.style.color =
+            hidden > 0.5 ? (close ? 'var(--accent)' : 'var(--danger)') : 'var(--muted)';
+          y += height + GAP;
+        });
+
+        const end = p(t, 17.6, 18.4);
+        $('end').style.opacity = end;
+        $('end').style.transform = `translateY(${lerp(16, 0, end)}px)`;
+      }
+
+      function place(node, x, alpha) {
+        node.style.transform = `translate(${x}px, 0) scale(${lerp(0.4, 1, alpha)})`;
+        node.style.opacity = alpha;
+      }
+      function tag(node, x, text, alpha) {
+        node.textContent = text;
+        const width = node.offsetWidth;
+        node.style.transform = `translate(${clamp(x - width / 2, 30, 1050 - width)}px, 0) scale(${lerp(0.7, 1, alpha)})`;
+        node.style.opacity = alpha;
+      }
+
+      window.seek = seek;
+      window.DURATION = DURATION;
+      seek(0);
+      // Opened by hand, it simply plays on a loop; a recorder passes ?still.
+      if (!location.search.includes('still')) {
+        const start = performance.now();
+        const tick = (now) => {
+          seek(((now - start) / 1000) % (DURATION + 1));
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }
+    </script>
+  </body>
+</html>
