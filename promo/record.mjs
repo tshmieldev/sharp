@@ -1,14 +1,15 @@
-// Renders promo/sliders.html to an MP4, one frame at a time, so the result is
-// smooth whatever the machine: `bun promo/record.mjs [name]` renders promo/<name>.html
-// to promo/sharp-<name>.mp4 (needs playwright and ffmpeg). Default name: simple.
-// A square cut: `bun promo/record.mjs list-square 1080 1080 1`.
+// Renders a promo page to an MP4, one frame at a time, so the result is smooth
+// whatever the machine: `bun promo/record.mjs [name]` renders promo/<name>.html to
+// promo/sharp-<name>.mp4. Default name: simple. A square cut:
+// `bun promo/record.mjs list-square 1080 1080 1`.
+// Needs ffmpeg, and a browser for playwright: `bunx playwright install chromium`.
 import { chromium } from 'playwright';
 import { mkdir, rm } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 
-const here = process.env.PROMO_DIR ?? path.dirname(fileURLToPath(import.meta.url));
+const here = path.dirname(fileURLToPath(import.meta.url));
 const frames = path.join(here, '.frames');
 const FPS = 30;
 const name = process.argv[2] ?? 'simple';
@@ -22,7 +23,10 @@ await mkdir(frames, { recursive: true });
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: scale });
-await page.goto(`file://${path.join(here, `${name}.html`)}?still`);
+// Built as a URL, not a string: a folder named with #, ? or % stays a path.
+const url = pathToFileURL(path.join(here, `${name}.html`));
+url.searchParams.set('still', '');
+await page.goto(url.href);
 await page.evaluate(() => document.fonts.ready);
 const duration = await page.evaluate(() => window.DURATION);
 const total = Math.round(duration * FPS);
