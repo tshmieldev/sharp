@@ -10,6 +10,7 @@ import {
   type SettingsPatch,
 } from '../common/settings';
 import { extensionsPage } from '../common/build';
+import { errorMessage } from '../common/errors';
 import { GeneralPanel, type GeneralTab } from './GeneralPanel';
 import { ListSheet, type ListKey } from './ListSheet';
 import { ModelBrowser } from './ModelBrowser';
@@ -48,6 +49,33 @@ export async function readerTab() {
   return all
     .filter((tab) => tab.url && filtered.test(tab.url))
     .sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))[0]?.url;
+}
+
+/** Makes sure the browser lets Sharp reach these origins, asking only for the
+ *  ones not yet granted. The prompt needs a browser window, and a popup opened
+ *  as a tab (Kiwi, and Firefox on a phone) has none: asking for an origin the
+ *  manifest already covers would fail there with "no active window" and block
+ *  the save for nothing. Must be called from a user gesture. */
+export async function ensureOrigins(origins: readonly string[]) {
+  const missing = (
+    await Promise.all(
+      origins.map(async (origin) =>
+        (await chrome.permissions.contains({ origins: [origin] })) ? null : origin,
+      ),
+    )
+  ).filter((origin): origin is string => origin !== null);
+  if (!missing.length) return;
+  const granted = await chrome.permissions.request({ origins: missing }).catch((error: unknown) => {
+    // The browser has nowhere to draw the prompt. Say what to do, not what
+    // went wrong inside.
+    if (/window/i.test(errorMessage(error))) {
+      throw new Error(
+        `This browser cannot ask for permission to reach ${missing.map(host).join(', ')} from here. OpenRouter needs no extra permission, so it works on phones; the other providers need a desktop browser.`,
+      );
+    }
+    throw error;
+  });
+  if (!granted) throw new Error('Permission to reach the provider was not granted.');
 }
 
 function normalize(settings: Settings): Settings {
@@ -236,15 +264,9 @@ export function App() {
           throw new Error('Use an HTTPS base URL without credentials, query or fragment.');
         }
       }
-      // Every origin these settings will call: the chat endpoint, or the
-      // classifier's provider and whoever describes its images. Already-granted
-      // origins resolve without a prompt. Called from the submit gesture, before
-      // any await (required by Chrome).
-      const wanted = apiOrigins(next);
-      if (wanted.length) {
-        const granted = await chrome.permissions.request({ origins: [...wanted] });
-        if (!granted) throw new Error('Permission to reach the provider was not granted.');
-      }
+      // Every origin these settings will call. Called from the submit gesture,
+      // before any other await (required by Chrome).
+      await ensureOrigins(apiOrigins(next));
       // Only changed fields are sent; unrelated updates from a tab aren't overwritten.
       const patch: SettingsPatch = Object.fromEntries(
         Object.entries(next).filter(([key, value]) => !same(value, saved[key as keyof Settings])),
