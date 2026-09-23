@@ -51,31 +51,64 @@ export async function readerTab() {
     .sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))[0]?.url;
 }
 
+/** Whether a granted pattern covers an origin. Sharp's own patterns are all
+ *  `https://host/*`, so equality does it, plus the two that cover everything. */
+const covers = (granted: string, origin: string) =>
+  granted === origin ||
+  granted === '<all_urls>' ||
+  granted === 'https://*/*' ||
+  granted === '*://*/*';
+
 /** Makes sure the browser lets Sharp reach these origins, asking only for the
- *  ones not yet granted. The prompt needs a browser window, and a popup opened
- *  as a tab (Kiwi, and Firefox on a phone) has none: asking for an origin the
- *  manifest already covers would fail there with "no active window" and block
- *  the save for nothing. Must be called from a user gesture. */
-export async function ensureOrigins(origins: readonly string[]) {
-  const missing = (
-    await Promise.all(
-      origins.map(async (origin) =>
-        (await chrome.permissions.contains({ origins: [origin] })) ? null : origin,
-      ),
-    )
-  ).filter((origin): origin is string => origin !== null);
-  if (!missing.length) return;
-  const granted = await chrome.permissions.request({ origins: missing }).catch((error: unknown) => {
-    // The browser has nowhere to draw the prompt. Say what to do, not what
-    // went wrong inside.
-    if (/window/i.test(errorMessage(error))) {
-      throw new Error(
-        `This browser cannot ask for permission to reach ${missing.map(host).join(', ')} from here. OpenRouter needs no extra permission, so it works on phones; the other providers need a desktop browser.`,
-      );
-    }
-    throw error;
-  });
-  if (!granted) throw new Error('Permission to reach the provider was not granted.');
+ *  ones not yet granted. Two rules meet here. The prompt needs a browser
+ *  window, and a popup opened as a tab (Kiwi, and Firefox on a phone) has none,
+ *  so asking for an origin the manifest already covers would fail there with
+ *  "no active window" and block the save for nothing. And Firefox allows the
+ *  prompt only while the user's gesture is live, which any `await` ends. So the
+ *  granted set is read from a cache filled when the popup opened, the comparison
+ *  is synchronous, and `permissions.request` is the first thing awaited. */
+export function ensureOrigins(origins: readonly string[], granted: readonly string[]) {
+  const missing = origins.filter((origin) => !granted.some((have) => covers(have, origin)));
+  if (!missing.length) return Promise.resolve();
+  return chrome.permissions
+    .request({ origins: missing })
+    .catch((error: unknown) => {
+      // The browser has nowhere to draw the prompt. Say what to do, not what
+      // went wrong inside.
+      if (/window/i.test(errorMessage(error))) {
+        throw new Error(
+          `This browser cannot ask for permission to reach ${missing.map(host).join(', ')} from here. OpenRouter needs no extra permission, so it works on phones; the other providers need a desktop browser.`,
+        );
+      }
+      throw error;
+    })
+    .then((ok) => {
+      if (!ok) throw new Error('Permission to reach the provider was not granted.');
+    });
+}
+
+/** Every origin the browser has granted, kept current. Read once when the popup
+ *  opens, then on every grant or revocation, so a save can compare without
+ *  waiting on anything. */
+export function useGrantedOrigins() {
+  const [granted, setGranted] = useState<readonly string[]>([]);
+  useEffect(() => {
+    let live = true;
+    const load = () =>
+      chrome.permissions.getAll().then((all) => {
+        if (live) setGranted(all.origins ?? []);
+      }, noop);
+    void load();
+    // Not every browser fires these; the load at open is what matters.
+    chrome.permissions.onAdded?.addListener(load);
+    chrome.permissions.onRemoved?.addListener(load);
+    return () => {
+      live = false;
+      chrome.permissions.onAdded?.removeListener(load);
+      chrome.permissions.onRemoved?.removeListener(load);
+    };
+  }, []);
+  return granted;
 }
 
 function normalize(settings: Settings): Settings {
@@ -109,6 +142,7 @@ export function App() {
   const [site, setSite] = useState<Site | null>(null);
   const [busy, setBusy] = useState(false);
   const [missing, setMissing] = useState<readonly string[]>([]);
+  const granted = useGrantedOrigins();
 
   /** Keep an open popup honest about edits made from the timeline, without
    *  discarding fields the reader is still editing here. */
@@ -264,9 +298,10 @@ export function App() {
           throw new Error('Use an HTTPS base URL without credentials, query or fragment.');
         }
       }
-      // Every origin these settings will call. Called from the submit gesture,
-      // before any other await (required by Chrome).
-      await ensureOrigins(apiOrigins(next));
+      // Every origin these settings will call. The first await in this handler:
+      // Firefox drops the user's gesture, and with it the right to prompt, at
+      // any earlier one.
+      await ensureOrigins(apiOrigins(next), granted);
       // Only changed fields are sent; unrelated updates from a tab aren't overwritten.
       const patch: SettingsPatch = Object.fromEntries(
         Object.entries(next).filter(([key, value]) => !same(value, saved[key as keyof Settings])),
