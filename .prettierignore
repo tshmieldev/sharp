@@ -11,3 +11,4 @@ bun.lock
 /popup.html
 .worktree-backup
 /firefox
+tests/fixtures/

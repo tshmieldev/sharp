@@ -1020,3 +1020,13 @@ html[data-aitf-motion='reduced'] .aitf-inspector {
   width: 14px;
   height: 14px;
 }
+
+/* The rebuilt client (November 2026). Its rows are absolutely positioned and
+   measured by X's virtualiser: a row that collapses to nothing leaves X's
+   cached offsets standing and opens a blank gap, so a fully hidden post keeps
+   its row at a pixel, and the row's own padding and rule go with the post. */
+[id^='urt:'] > ul > li:has(article[data-aitf-hidden='remove']) > [role='link'] {
+  min-height: 1px;
+  padding-block: 0 !important;
+  border-bottom: 0 !important;
+}

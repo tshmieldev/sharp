@@ -1,7 +1,8 @@
 // X portals its post menu into #layers: a dropdown at desktop widths, a bottom
 // sheet at phone widths. No generated class names or translated labels are used
 // for selection. Unknown layouts are left untouched.
-export const moreSelector = '[data-testid="caret"]';
+export const moreSelector =
+  '[data-testid="caret"], button[aria-label="More"][data-slot="xds-menu-trigger"]';
 export const sheetSelector = '[data-testid="sheetDialog"]';
 export const dropdownSelector = `[data-testid="Dropdown"], ${sheetSelector}`;
 const itemSelector = '[role="menuitem"]';
