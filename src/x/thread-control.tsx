@@ -2,7 +2,7 @@ import { render } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { request } from '../common/messages';
 import type { PublicSettings } from '../common/settings';
-import { articleSelector, currentThread, focalArticle } from './extract';
+import { articleSelector, cellSelector, currentThread, focalArticle } from './extract';
 import { visible } from './post-menu-dom';
 import { Check, Mark } from './icons';
 import { typeface } from './view';
@@ -10,7 +10,7 @@ import { typeface } from './view';
 /** Find the inline reply section, never a modal composer or a timeline's post box. */
 export function replySection(id: string): HTMLElement | null {
   const focal = focalArticle(id);
-  const column = focal?.closest('[data-testid="primaryColumn"]');
+  const column = focal?.closest('[data-testid="primaryColumn"], main');
   if (!focal || !column) return null;
   const candidates: HTMLElement[] = [];
   for (const editor of column.querySelectorAll<HTMLElement>('[data-testid="tweetTextarea_0"]')) {
@@ -31,13 +31,13 @@ export function replySection(id: string): HTMLElement | null {
     while (
       section.parentElement &&
       section.parentElement !== column &&
-      !section.parentElement.matches('[data-testid="cellInnerDiv"]') &&
+      !section.parentElement.matches(cellSelector) &&
       !section.parentElement.querySelector(articleSelector)
     ) {
       section = section.parentElement;
     }
     // Keep the control inside a virtualized cell so X can measure its height.
-    if (section.matches('[data-testid="cellInnerDiv"]')) {
+    if (section.matches(cellSelector)) {
       section =
         [...section.children].find(
           (child): child is HTMLElement =>
@@ -60,15 +60,15 @@ export function replySection(id: string): HTMLElement | null {
  *  reason the desktop path descends into the cell it finds. */
 function firstReplyAnchor(id: string): HTMLElement | null {
   const focal = focalArticle(id);
-  const cell = focal?.closest<HTMLElement>('[data-testid="cellInnerDiv"]');
-  if (!cell || !focal?.closest('[data-testid="primaryColumn"]')) return null;
+  const cell = focal?.closest<HTMLElement>(cellSelector);
+  if (!cell || !focal?.closest('[data-testid="primaryColumn"], main')) return null;
   for (let next = cell.nextElementSibling; next; next = next.nextElementSibling) {
     if (!(next instanceof HTMLElement) || next.matches('.aitf-thread-control')) continue;
     // X separates entries with empty cells, one straight after the focal post.
     if (!next.textContent?.trim() && !next.querySelector(articleSelector)) continue;
     // Anchor on the first reply, and only on a reply: anything else after the
     // focal post is X's own furniture and not somewhere to mount a control.
-    if (!next.matches('[data-testid="cellInnerDiv"]') || !next.querySelector(articleSelector)) {
+    if (!next.matches(cellSelector) || !next.querySelector(articleSelector)) {
       return null;
     }
     return (

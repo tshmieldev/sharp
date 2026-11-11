@@ -51,7 +51,7 @@ const NAV_SETTLE = 1500;
 const RESTORE_WINDOW = 3000;
 const isHome = (path: string) => /^\/home\/?$/.test(path);
 type Anchor = { id: string; top: number };
-const cellSelector = '[data-testid="cellInnerDiv"]';
+const cellSelector = extract.cellSelector;
 /** X's acknowledgement in a timeline cell: no post, and an Undo to take it back. */
 function isFeedbackCard(cell: HTMLElement): boolean {
   if (cell.querySelector(extract.articleSelector)) return false;
@@ -366,6 +366,10 @@ export class TimelineController {
   scan() {
     if (this.stopped || !this.settings || !this.rules) return;
     this.scannedAt = Date.now();
+    // Which client X served, for the stylesheet's few client-specific rules.
+    const client = extract.modernClient() ? 'modern' : 'legacy';
+    if (document.documentElement.dataset.aitfClient !== client)
+      document.documentElement.dataset.aitfClient = client;
     this.threadControl.update(this.settings);
     if (this.path !== location.pathname) {
       const returning = isHome(location.pathname) && this.path !== '' && !isHome(this.path);

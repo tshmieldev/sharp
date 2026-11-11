@@ -2,7 +2,7 @@ import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import type { PublicSettings } from '../common/settings';
 import { Check, Inspect, Mark, Query } from './icons';
-import { articleSelector } from './extract';
+import { articleSelector, cellOf } from './extract';
 
 export type HiddenStyle = PublicSettings['hideStyle'] | 'remove';
 /** What the reader can do about a verdict they have already overruled by revealing. */
@@ -54,7 +54,6 @@ export type FeedbackState = {
   onUndo: () => void;
 };
 
-const cellSelector = '[data-testid="cellInnerDiv"]';
 type Mounted = { root: HTMLDivElement; signature: string };
 const mounted = new WeakMap<HTMLElement, Mounted>();
 const signatureOf = (state: PostState) =>
@@ -149,7 +148,7 @@ function unmount(article: HTMLElement) {
   delete article.dataset.aitfHidden;
   delete article.dataset.aitfRevealed;
   delete article.dataset.aitfKept;
-  article.closest<HTMLElement>(cellSelector)?.removeAttribute('data-aitf-unsure');
+  cellOf(article)?.removeAttribute('data-aitf-unsure');
 }
 
 export function reveal(article: HTMLElement) {
@@ -277,12 +276,15 @@ export function apply(article: HTMLElement, state: PostState, onReveal: () => vo
   const family = typeface(article);
   if (family) root.style.fontFamily = family;
   article.prepend(root);
+  // The rebuilt client lays the article out as a column, where a full-width
+  // basis would be read as height. The stylesheet's basis is for the old row.
+  if (getComputedStyle(article).flexDirection.startsWith('column')) root.style.flex = '0 0 auto';
   if (state.kind === 'revealed') article.dataset.aitfRevealed = '';
   else if (state.kind === 'kept') article.dataset.aitfKept = '';
   else article.dataset.aitfHidden = state.kind === 'pending' ? 'pending' : state.style;
   // The tint belongs to the cell: the article sits inside X's padding.
   if (state.kind === 'hidden' && state.unsure)
-    article.closest<HTMLElement>(cellSelector)?.setAttribute('data-aitf-unsure', '');
+    cellOf(article)?.setAttribute('data-aitf-unsure', '');
   mounted.set(article, { root, signature });
 
   if (state.kind === 'pending') {
