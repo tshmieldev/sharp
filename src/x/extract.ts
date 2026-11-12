@@ -141,7 +141,7 @@ export function focalArticle(id: string): HTMLElement | null {
 
 /** Where a row sits in its timeline. The rebuilt client positions rows
  *  absolutely and reuses nodes, so document order says nothing; the index does. */
-function rowIndex(article: Element): number | null {
+export function rowIndex(article: Element): number | null {
   const index = cellOf(article)?.getAttribute('data-index');
   return index === null || index === undefined ? null : Number(index);
 }

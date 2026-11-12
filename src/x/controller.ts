@@ -17,6 +17,7 @@ import { ThreadControl } from './thread-control';
 import { NotInterested } from './not-interested';
 import { Feedback } from './feedback';
 import type { WireSwitch } from './wire-extract';
+import { createPager } from '../unfry/pager';
 
 type Phase =
   | { type: 'queued' }
@@ -29,6 +30,15 @@ type RecordState = {
   attempts: number;
   revealed: boolean;
   counted: boolean;
+  /** Unfry: the reader opened this post's lock. Holds for the tab. */
+  unlocked: boolean;
+};
+/** One post's drawing, decided but not yet drawn. */
+type Planned = {
+  article: HTMLElement;
+  record: RecordState;
+  state: view.PostState;
+  reveal: () => void;
 };
 // A post is identified by its id alone. Expanding "Show more" rewrites the
 // visible text without making it a different post, and a decided post must
@@ -146,6 +156,12 @@ export class TimelineController {
   /** X's own request, sent directly: no menu, no card, no cell to claim. The
    *  menu is the fallback when the wire has not supplied what it needs. */
   private readonly feedback = new Feedback();
+  /** Unfry paging: the row the current page starts at, the starts of the
+   *  pages before it, and whether Next is waiting for more rows to mount. */
+  private readonly pager = createPager();
+  private pageStart: number | null = null;
+  private pageHistory: number[] = [];
+  private pageWantsNext = false;
   /** Every post reported over the wire, and how far it got. */
   private reported = new Map<string, 'sending' | 'told'>();
   /** What the banner said for each hidden post, so the card can say it too. */
@@ -289,6 +305,7 @@ export class TimelineController {
     delete document.documentElement.dataset.aitfMotion;
     delete document.documentElement.dataset.aitfGreyUi;
     delete document.documentElement.dataset.aitfGreyContent;
+    this.pager.destroy();
     view.restoreAll();
   }
 
@@ -312,6 +329,7 @@ export class TimelineController {
           attempts: 0,
           revealed: false,
           counted: false,
+          unlocked: false,
         });
       }
       this.scan();
@@ -376,6 +394,9 @@ export class TimelineController {
       this.path = location.pathname;
       this.openedAt = Date.now();
       this.threadContext.clear();
+      this.pageStart = null;
+      this.pageHistory = [];
+      this.pageWantsNext = false;
       if (returning && this.homeAnchor) {
         this.restoring = this.homeAnchor;
         this.restoreUntil = this.openedAt + RESTORE_WINDOW;
@@ -385,6 +406,9 @@ export class TimelineController {
     const focal = extract.focalArticle(thread);
     const waitingForFocal = thread && !focal && Date.now() - this.openedAt < 2500;
     const live = new Set<string>();
+    // Decided first, drawn after: Unfry may still blank or lock what a post
+    // would otherwise show, and a lock redrawn each scan would lose its press.
+    const plan: Planned[] = [];
     for (const article of document.querySelectorAll<HTMLElement>(extract.articleSelector)) {
       const post = extract.describe(
         article,
@@ -411,14 +435,26 @@ export class TimelineController {
       );
       let record = this.records.get(key);
       if (!record) {
-        record = { post, phase: { type: 'queued' }, attempts: 0, revealed: false, counted: false };
+        record = {
+          post,
+          phase: { type: 'queued' },
+          attempts: 0,
+          revealed: false,
+          counted: false,
+          unlocked: false,
+        };
         this.records.set(key, record);
       }
       const settled = record;
       const apply = (state: view.PostState) =>
-        view.apply(article, state, () => {
-          settled.revealed = true;
-          this.scan();
+        plan.push({
+          article,
+          record: settled,
+          state,
+          reveal: () => {
+            settled.revealed = true;
+            this.scan();
+          },
         });
       // A scored verdict is read against the reader's lines as they stand now,
       // so moving either one re-reads what is on the page for free.
@@ -505,6 +541,22 @@ export class TimelineController {
         apply({ kind: 'show' });
       }
     }
+    // Unfry works the timelines: never a thread the reader opened, never the
+    // pages they filled themselves.
+    const unfryHere =
+      this.settings.unfryX &&
+      !thread &&
+      !/^\/(i\/bookmarks|i\/history|bookmarks|notifications|messages|settings)(?:\/|$)/.test(
+        this.path,
+      );
+    if (unfryHere) this.unfry(plan);
+    else {
+      this.pageStart = null;
+      this.pageHistory = [];
+      this.pageWantsNext = false;
+      this.pager.update(null);
+    }
+    for (const item of plan) view.apply(item.article, item.state, item.reveal);
     // Keep settled identities for remounts, but bound memory during long scrolling sessions.
     if (this.records.size > 1000) {
       for (const [key, record] of this.records) {
@@ -519,6 +571,132 @@ export class TimelineController {
     this.syncFeedback();
     this.scheduleFlush();
     this.restoreAnchor();
+  }
+
+  /** Unfry. The feed is dealt out a page at a time: a page is the reader's
+   *  chosen number of posts the filter let through, in row order from the
+   *  page's first row. Rows before and after the page keep their height and
+   *  show nothing, hidden posts inside it keep their banner, and every post
+   *  the filter let through arrives locked until the reader opens it. */
+  private unfry(plan: Planned[]) {
+    const settings = this.settings!;
+    const size = settings.unfryPageSize;
+    const rows = plan
+      .map((item) => ({ item, index: extract.rowIndex(item.article) }))
+      .filter((row): row is { item: Planned; index: number } => row.index !== null)
+      .sort((a, b) => a.index - b.index);
+    if (!rows.length) {
+      this.pager.update(null);
+      return;
+    }
+    if (this.pageStart === null) this.pageStart = rows[0]!.index;
+    const start = this.pageStart;
+    const hidden = (item: Planned) => item.state.kind === 'hidden';
+    const pending = (item: Planned) => item.state.kind === 'pending';
+    const members: { item: Planned; index: number }[] = [];
+    // Where the page ends: at its last post once full, at the first post still
+    // being judged, or open-ended while fewer rows than a page have mounted.
+    let end = Infinity;
+    let complete = false;
+    for (const row of rows) {
+      if (row.index < start || hidden(row.item)) continue;
+      if (pending(row.item)) {
+        end = row.index;
+        break;
+      }
+      members.push(row);
+      if (members.length >= size) {
+        end = row.index;
+        complete = true;
+        break;
+      }
+    }
+    const next = complete
+      ? rows.find((row) => row.index > end && !hidden(row.item) && !pending(row.item))
+      : undefined;
+    if (this.pageWantsNext && next) {
+      this.pageWantsNext = false;
+      this.pageHistory.push(start);
+      this.pageStart = next.index;
+      this.scrollToRow(next.item.article);
+      this.unfry(plan);
+      return;
+    }
+    for (const row of rows) {
+      if (row.index < start || row.index > end) {
+        row.item.state = { kind: 'blank' };
+        continue;
+      }
+      if (!members.includes(row) || row.item.record.unlocked) continue;
+      const { record, article } = row.item;
+      const verdict =
+        record.phase.type === 'decided' ? readVerdict(settings, record.phase.verdict) : null;
+      const facts: string[] = [];
+      if (verdict?.score !== undefined)
+        facts.push(`${view.percent(view.sureness(verdict.score, settings.hideFrom))} likely fine`);
+      const photos = extract.images(article, 4).length;
+      const video = article.querySelector('video') !== null;
+      if (video) facts.push('video');
+      else if (photos > 1) facts.push(`${photos} photos`);
+      else if (photos === 1) facts.push('photo');
+      if (record.post.text.length > 280) facts.push('long post');
+      if (record.post.context) facts.push('reply');
+      row.item.state = {
+        kind: 'locked',
+        title: extract.author(article).name,
+        facts,
+        unsure: false,
+        holdMs: settings.unfryHoldMs,
+        difficulty: settings.unfryPuzzle,
+        onUnlock: () => {
+          record.unlocked = true;
+          this.scan();
+        },
+      };
+    }
+    this.pager.update({
+      page: this.pageHistory.length + 1,
+      hasPrev: this.pageHistory.length > 0,
+      hasNext: next !== undefined,
+      shown: members.length,
+      size,
+      onPrev: () => this.pagePrev(),
+      onNext: () => this.pageNext(members.at(-1)?.item.article ?? null),
+    });
+  }
+
+  private pageNext(last: HTMLElement | null) {
+    if (this.stopped) return;
+    // The next page is picked on the scan that follows; when no row for it has
+    // mounted yet, moving to the end of this page is what makes X mount more.
+    this.pageWantsNext = true;
+    this.scan();
+    if (this.pageWantsNext && last) {
+      const cell = extract.cellOf(last) ?? last;
+      const bottom =
+        cell.getBoundingClientRect().bottom + window.scrollY - window.innerHeight * 0.6;
+      window.scrollTo({ top: Math.max(0, bottom) });
+    }
+  }
+
+  private pagePrev() {
+    if (this.stopped) return;
+    const start = this.pageHistory.pop();
+    if (start === undefined) return;
+    this.pageWantsNext = false;
+    this.pageStart = start;
+    this.scan();
+    const first = [...document.querySelectorAll<HTMLElement>(extract.articleSelector)].find(
+      (article) => extract.rowIndex(article) === start,
+    );
+    if (first) this.scrollToRow(first);
+    else window.scrollTo({ top: 0 });
+  }
+
+  private scrollToRow(article: HTMLElement) {
+    const cell = extract.cellOf(article) ?? article;
+    const top = cell.getBoundingClientRect().top + window.scrollY - 56;
+    window.scrollTo({ top: Math.max(0, top) });
   }
 
   /** The post at the top of the viewport, by id, with its offset. */

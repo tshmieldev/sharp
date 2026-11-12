@@ -1030,3 +1030,16 @@ html[data-aitf-motion='reduced'] .aitf-inspector {
   padding-block: 0 !important;
   border-bottom: 0 !important;
 }
+
+/* Unfry. A locked post is its lock and nothing else; a post on another page
+   keeps its box and loses its ink, so the feed's height, and X's measure of
+   it, stand still while the reader turns pages. */
+article[data-aitf-hidden='locked'] > :not(.aitf-slot) {
+  display: none !important;
+}
+article[data-aitf-hidden='blank'] > :not(.aitf-slot) {
+  visibility: hidden !important;
+}
+article[data-aitf-hidden='blank'] {
+  pointer-events: none !important;
+}

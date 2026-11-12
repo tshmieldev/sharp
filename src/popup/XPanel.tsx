@@ -13,6 +13,7 @@ import { Alert, ChevronRight, Close } from './icons';
 import * as fmt from './format';
 import { lists, type ListKey } from './ListSheet';
 import { Field, NumberField, RangeField, Segmented, ToggleRow, type SettingsEditor } from './ui';
+import { UnfryGroup } from './Unfry';
 import { ConfidenceZones, ImageRange, linesNote, rangeNote } from './Zones';
 
 export type XTab = 'filtering' | 'rules' | 'appearance' | 'advanced' | 'activity';
@@ -594,6 +595,8 @@ export function XPanel({
           </>
         )}
       </section>
+
+      <UnfryGroup settings={settings} update={update} site="x" />
 
       <section class="group">
         <h2>Comments</h2>

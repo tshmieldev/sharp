@@ -1,0 +1,289 @@
+/* Unfry: the lock on a post, and the pager at the foot of the window. Colour
+   and type are the page's own; the accent and the ring are ours. */
+
+.aitf-lock {
+  --aitf-hold: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  text-align: start;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+  outline: none;
+}
+.aitf-lock:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--aitf-accent);
+}
+.aitf-lock[data-layout='cover'] {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  text-align: center;
+  border-radius: inherit;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+/* The ring: a thin track, and the accent sweeping round it as the press
+   goes on. At the full turn the post opens. */
+.aitf-lock-ring {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 99px;
+  background:
+    conic-gradient(
+        var(--aitf-accent) calc(var(--aitf-hold) * 360deg),
+        color-mix(in srgb, currentColor 14%, transparent) 0
+      )
+      border-box,
+    transparent;
+  -webkit-mask:
+    radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px)),
+    radial-gradient(farthest-side, #000 60%, transparent 61%);
+  mask:
+    radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px)),
+    radial-gradient(farthest-side, #000 60%, transparent 61%);
+}
+.aitf-lock-ring svg {
+  width: 16px;
+  height: 16px;
+  opacity: 0.75;
+}
+.aitf-lock[data-holding] .aitf-lock-ring svg {
+  opacity: 1;
+}
+.aitf-lock[data-layout='cover'] .aitf-lock-ring {
+  width: 44px;
+  height: 44px;
+}
+
+.aitf-lock-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.aitf-lock[data-layout='cover'] .aitf-lock-text {
+  flex: none;
+  align-items: center;
+  max-width: 100%;
+}
+.aitf-lock-title {
+  overflow: hidden;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.aitf-lock[data-layout='cover'] .aitf-lock-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+}
+.aitf-lock-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+.aitf-lock[data-layout='cover'] .aitf-lock-facts {
+  justify-content: center;
+}
+.aitf-lock-fact + .aitf-lock-fact::before {
+  content: '·';
+  margin-inline-end: 10px;
+  opacity: 0.6;
+}
+.aitf-lock[data-unsure] .aitf-lock-fact:first-child {
+  color: var(--aitf-accent);
+  opacity: 1;
+}
+.aitf-lock-hint {
+  flex: none;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.55;
+}
+.aitf-lock[data-holding] .aitf-lock-hint {
+  opacity: 0.9;
+}
+
+/* The sum. One line: question, answer, Open; a wrong answer shakes once and
+   the next sum is already there. */
+.aitf-lock-puzzle {
+  cursor: default;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.aitf-lock-sum {
+  flex: none;
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.aitf-lock-answer {
+  box-sizing: border-box;
+  width: 5.5em;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+.aitf-lock-answer:focus-visible {
+  outline: 2px solid var(--aitf-accent);
+  outline-offset: 1px;
+}
+.aitf-lock-go,
+.aitf-lock-back {
+  flex: none;
+  padding: 6px 14px;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.aitf-lock-go {
+  border-color: var(--aitf-accent);
+  background: var(--aitf-accent);
+  color: #fff;
+}
+.aitf-lock-back {
+  margin-inline-start: auto;
+  font-weight: 500;
+  opacity: 0.7;
+}
+.aitf-lock-puzzle[data-wrong] {
+  animation: aitf-shake 320ms ease-out;
+}
+@keyframes aitf-shake {
+  20% {
+    transform: translateX(-5px);
+  }
+  50% {
+    transform: translateX(4px);
+  }
+  80% {
+    transform: translateX(-2px);
+  }
+}
+.aitf-lock[data-layout='cover'].aitf-lock-puzzle {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.aitf-lock[data-layout='cover'] .aitf-lock-back {
+  margin-inline-start: 0;
+}
+
+/* The pager. A pill fixed at the foot, out of the way of the site's own bars. */
+.aitf-pager-root {
+  position: fixed;
+  inset-inline: 0;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 2147483000;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.aitf-pager {
+  --aitf-accent: #7c6cff;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid rgba(127, 127, 127, 0.35);
+  border-radius: 999px;
+  background: rgba(20, 20, 24, 0.82);
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(12px);
+  pointer-events: auto;
+}
+@media (prefers-color-scheme: light) {
+  .aitf-pager {
+    background: rgba(255, 255, 255, 0.88);
+    color: #111;
+  }
+}
+.aitf-pager-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.aitf-pager-step:hover:not(:disabled) {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+.aitf-pager-step:focus-visible {
+  outline: 2px solid var(--aitf-accent);
+  outline-offset: -2px;
+}
+.aitf-pager-step:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.aitf-pager-step[data-loading] .aitf-pager-word {
+  opacity: 0.7;
+}
+.aitf-pager-where {
+  padding: 0 10px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+.aitf-pager-where small {
+  font-size: 12px;
+  opacity: 0.7;
+}
+@media (max-width: 420px) {
+  .aitf-pager-word {
+    display: none;
+  }
+  .aitf-pager-step {
+    padding: 0 12px;
+    font-size: 20px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aitf-lock-puzzle[data-wrong] {
+    animation: none;
+  }
+}

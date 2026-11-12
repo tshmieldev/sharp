@@ -81,6 +81,15 @@ export const Query = (props: JSX.SVGAttributes<SVGSVGElement>) => (
 export const Inspect = (props: JSX.SVGAttributes<SVGSVGElement>) =>
   svg(props, <path d="M8.5 7 3.5 12l5 5M15.5 7l5 5-5 5M12 12h.01" />);
 
+/** A padlock: the body, and the shackle open at one side. */
+export const Lock = (props: JSX.SVGAttributes<SVGSVGElement>) =>
+  svg(
+    props,
+    <>
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </>,
+  );
 export const Close = (props: JSX.SVGAttributes<SVGSVGElement>) =>
   svg(props, <path d="M6 6l12 12M18 6 6 18" />);
 

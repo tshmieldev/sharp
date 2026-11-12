@@ -59,6 +59,13 @@ Describe what you want to see — or never see again — in plain language.
   too.
 - **Greyscale.** Wash the colour out of the chrome, the content, or both, on X
   and on YouTube. Less pull, same information.
+- **Unfry.** A low-stimulation mode for a fried brain, on X and on YouTube.
+  Every post the filter lets through arrives locked: you see who it's from, how
+  likely it is to be fine, and whether it's a photo, a video or a long one, and
+  you open it by holding for a second or answering a sum (your pick of
+  difficulty). The feed stops scrolling forever and comes a page at a time,
+  three posts by default, with Prev and Next. Hidden posts stay hidden and
+  don't count. On YouTube this needs no model at all.
 
 ## Private by construction
 

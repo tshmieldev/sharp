@@ -211,3 +211,54 @@ html[data-aitf-yt-grey-content] .video-thumbnail-container img,
 html[data-aitf-yt-grey-content] #player {
   filter: grayscale(1) !important;
 }
+
+/* Unfry. A locked video keeps its title and loses its picture; the lock lies
+   over the thumbnail. A video on another page keeps its box and shows nothing,
+   so the grid's height, and YouTube's idea of where its end is, do not move. */
+[data-aitf-yt-locked]
+  :is(
+    ytd-thumbnail,
+    yt-thumbnail-view-model,
+    ytm-thumbnail-cover,
+    .video-thumbnail-container,
+    .video-thumbnail-container-fluid,
+    ytd-playlist-thumbnail
+  )
+  :is(img, video, yt-image) {
+  visibility: hidden !important;
+}
+[data-aitf-yt-locked]
+  :is(
+    ytd-thumbnail,
+    yt-thumbnail-view-model,
+    ytm-thumbnail-cover,
+    .video-thumbnail-container,
+    .video-thumbnail-container-fluid,
+    ytd-playlist-thumbnail
+  ) {
+  pointer-events: none !important;
+}
+[data-aitf-yt-blank] {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+.aitf-yt-lock {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  container-type: inline-size;
+  border-radius: inherit;
+  pointer-events: auto;
+  font-family: 'Roboto', 'YouTube Sans', Arial, sans-serif;
+  color: #fff;
+}
+.aitf-yt-lock .aitf-lock[data-layout='cover'] {
+  background: rgba(0, 0, 0, 0.72);
+}
+/* A sidebar thumbnail is too small for words: the ring alone says it. */
+@container (max-width: 230px) {
+  .aitf-yt-lock .aitf-lock-text,
+  .aitf-yt-lock .aitf-lock-hint {
+    display: none;
+  }
+}
