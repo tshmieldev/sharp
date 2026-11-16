@@ -1,17 +1,11 @@
 // Unfry on YouTube. No model here: every video card is let through, so every
 // card arrives locked. The title stays, the picture goes behind the lock, a
 // hover plays nothing, and a click opens nothing until the lock is opened by
-// a held press or a sum. The feed is dealt out a page at a time; cards on
-// other pages keep their place and show nothing, so the grid's height, and
-// YouTube's idea of where its end is, do not move.
+// a held press.
 import type { PublicSettings } from '../common/settings';
 import { mountLock } from '../unfry/lock';
-import { createPager } from '../unfry/pager';
 
-type UnfrySettings = Pick<
-  PublicSettings,
-  'unfryYoutube' | 'unfryHoldMs' | 'unfryPuzzle' | 'unfryPageSize' | 'youtubeEnabled'
->;
+type UnfrySettings = Pick<PublicSettings, 'unfryYoutube' | 'unfryHoldMs' | 'youtubeEnabled'>;
 
 /** A video card on either site. The outermost match is the card. */
 const cardSelector = [
@@ -39,7 +33,6 @@ const channelSelector =
 const durationSelector =
   'ytd-thumbnail-overlay-time-status-renderer #text, badge-shape .ytBadgeShapeText, .yt-badge-shape__text, ytm-thumbnail-overlay-time-status-renderer';
 const LOCKED = 'data-aitf-yt-locked';
-const BLANK = 'data-aitf-yt-blank';
 const SCAN_THROTTLE = 150;
 const POLL_INTERVAL = 1500;
 
@@ -75,10 +68,6 @@ export class UnfryYouTube {
     HTMLElement,
     { key: string; signature: string; down: () => void }
   >();
-  private readonly pager = createPager();
-  private startKey: string | null = null;
-  private history: string[] = [];
-  private wantsNext = false;
   private observer: MutationObserver | null = null;
   private scanTimer = 0;
   private pollTimer = 0;
@@ -97,8 +86,6 @@ export class UnfryYouTube {
     });
     this.observer.observe(document.documentElement, { childList: true, subtree: true });
     this.pollTimer = window.setInterval(() => this.scan(), POLL_INTERVAL);
-    window.addEventListener('scroll', this.scheduleScan, { passive: true });
-    window.addEventListener('yt-navigate-finish', this.onNavigate);
     document.addEventListener('click', this.onClick, true);
     document.addEventListener('auxclick', this.onClick, true);
     this.scan();
@@ -110,8 +97,6 @@ export class UnfryYouTube {
     this.observer?.disconnect();
     window.clearTimeout(this.scanTimer);
     window.clearInterval(this.pollTimer);
-    window.removeEventListener('scroll', this.scheduleScan);
-    window.removeEventListener('yt-navigate-finish', this.onNavigate);
     document.removeEventListener('click', this.onClick, true);
     document.removeEventListener('auxclick', this.onClick, true);
     for (const [element, lock] of this.locks) {
@@ -119,18 +104,7 @@ export class UnfryYouTube {
       element.removeAttribute(LOCKED);
     }
     this.locks.clear();
-    for (const element of document.querySelectorAll(`[${BLANK}]`)) element.removeAttribute(BLANK);
-    this.pager.destroy();
-    this.startKey = null;
-    this.history = [];
   }
-
-  private onNavigate = () => {
-    this.startKey = null;
-    this.history = [];
-    this.wantsNext = false;
-    this.scan();
-  };
 
   private scheduleScan = () => {
     if (!this.running || this.scanTimer) return;
@@ -140,7 +114,7 @@ export class UnfryYouTube {
     }, SCAN_THROTTLE);
   };
 
-  /** A locked card opens nothing. A click anywhere on it asks for the sum. */
+  /** A locked card opens nothing. A click anywhere on it points at the lock. */
   private onClick = (event: MouseEvent) => {
     const target = event.target;
     if (!(target instanceof Element) || target.closest('.aitf-yt-lock')) return;
@@ -148,65 +122,26 @@ export class UnfryYouTube {
     if (!card) return;
     event.preventDefault();
     event.stopPropagation();
-    const lock = card.querySelector<HTMLElement>('.aitf-lock');
-    lock?.focus({ preventScroll: true });
-    lock?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    card.querySelector<HTMLElement>('.aitf-lock')?.focus({ preventScroll: true });
   };
 
   scan() {
     const settings = this.settings;
     if (!this.running || !settings) return;
-    const all = cards();
     const seen = new Set<HTMLElement>();
-    const size = settings.unfryPageSize;
-    let start = this.startKey === null ? 0 : all.findIndex((card) => card.key === this.startKey);
-    if (start < 0) {
-      // The page's first card is gone (a refresh, a different feed): start over.
-      start = 0;
-      this.startKey = all[0]?.key ?? null;
-      this.history = [];
-    } else if (this.startKey === null && all[0]) {
-      this.startKey = all[0].key;
-    }
-    const end = Math.min(all.length, start + size) - 1;
-    const next = all[end + 1];
-    if (this.wantsNext && next) {
-      this.wantsNext = false;
-      this.history.push(this.startKey!);
-      this.startKey = next.key;
-      this.scrollTo(next.element);
-      this.scan();
-      return;
-    }
-    all.forEach((card, index) => {
+    for (const card of cards()) {
       seen.add(card.element);
-      const onPage = index >= start && index <= end;
-      if (onPage) card.element.removeAttribute(BLANK);
-      else card.element.setAttribute(BLANK, '');
-      if (!onPage || this.unlocked.has(card.key)) this.unlock(card.element);
+      if (this.unlocked.has(card.key)) this.unlock(card.element);
       else this.lock(card, settings);
-    });
+    }
     for (const element of this.locks.keys()) if (!seen.has(element)) this.unlock(element);
-    this.pager.update(
-      all.length
-        ? {
-            page: this.history.length + 1,
-            hasPrev: this.history.length > 0,
-            hasNext: next !== undefined,
-            shown: Math.max(0, end - start + 1),
-            size,
-            onPrev: () => this.prev(),
-            onNext: () => this.next(all[end]?.element ?? null),
-          }
-        : null,
-    );
   }
 
   private lock(card: Card, settings: UnfrySettings) {
     const thumb = card.element.querySelector<HTMLElement>(thumbSelector);
     if (!thumb) return;
     const { title, channel, duration } = describe(card.element);
-    const signature = `${card.key}:${title}:${channel}:${duration}:${settings.unfryHoldMs}:${settings.unfryPuzzle}`;
+    const signature = `${card.key}:${title}:${channel}:${duration}:${settings.unfryHoldMs}`;
     const existing = this.locks.get(card.element);
     if (existing?.signature === signature && card.element.querySelector('.aitf-yt-lock')) return;
     existing?.down();
@@ -220,7 +155,6 @@ export class UnfryYouTube {
       title: title || 'Video',
       facts: [channel, duration].filter(Boolean),
       holdMs: settings.unfryHoldMs,
-      difficulty: settings.unfryPuzzle,
       onUnlock: () => {
         this.unlocked.add(card.key);
         this.unlock(card.element);
@@ -243,30 +177,5 @@ export class UnfryYouTube {
       this.locks.delete(element);
     }
     element.removeAttribute(LOCKED);
-  }
-
-  private next(last: HTMLElement | null) {
-    this.wantsNext = true;
-    this.scan();
-    if (this.wantsNext && last) {
-      const bottom =
-        last.getBoundingClientRect().bottom + window.scrollY - window.innerHeight * 0.6;
-      window.scrollTo({ top: Math.max(0, bottom) });
-    }
-  }
-
-  private prev() {
-    const start = this.history.pop();
-    if (start === undefined) return;
-    this.wantsNext = false;
-    this.startKey = start;
-    this.scan();
-    const first = cards().find((card) => card.key === start);
-    if (first) this.scrollTo(first.element);
-  }
-
-  private scrollTo(element: HTMLElement) {
-    const top = element.getBoundingClientRect().top + window.scrollY - 72;
-    window.scrollTo({ top: Math.max(0, top) });
   }
 }

@@ -15,13 +15,7 @@ export const flags = {
 const THUMBNAILS = 'aitfYtThumbs';
 export type YouTubeSettings = Pick<
   PublicSettings,
-  | keyof typeof flags
-  | 'youtubeEnabled'
-  | 'thumbnails'
-  | 'unfryYoutube'
-  | 'unfryHoldMs'
-  | 'unfryPuzzle'
-  | 'unfryPageSize'
+  keyof typeof flags | 'youtubeEnabled' | 'thumbnails' | 'unfryYoutube' | 'unfryHoldMs'
 >;
 
 export function apply(settings: YouTubeSettings, root: HTMLElement = document.documentElement) {
@@ -43,8 +37,6 @@ const off: YouTubeSettings = {
   youtubeGreyscaleContent: false,
   unfryYoutube: false,
   unfryHoldMs: 1000,
-  unfryPuzzle: 'easy',
-  unfryPageSize: 3,
 };
 
 /** Importing a site entry must not install listeners or touch the page. */

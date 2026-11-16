@@ -1,5 +1,5 @@
-/* Unfry: the lock on a post, and the pager at the foot of the window. Colour
-   and type are the page's own; the accent and the ring are ours. */
+/* Unfry: the lock on a post. Colour and type are the page's own; the accent
+   and the ring are ours. */
 
 .aitf-lock {
   --aitf-hold: 0;
@@ -127,163 +127,24 @@
   opacity: 0.9;
 }
 
-/* The sum. One line: question, answer, Open; a wrong answer shakes once and
-   the next sum is already there. */
-.aitf-lock-puzzle {
-  cursor: default;
-  user-select: text;
-  -webkit-user-select: text;
+.aitf-lock[data-nudge] .aitf-lock-hint {
+  opacity: 0.9;
+  color: var(--aitf-accent);
+  animation: aitf-nudge 320ms ease-out;
 }
-.aitf-lock-sum {
-  flex: none;
-  font-size: 16px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-.aitf-lock-answer {
-  box-sizing: border-box;
-  width: 5.5em;
-  min-width: 0;
-  padding: 6px 10px;
-  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-  border-radius: 8px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: 16px;
-  font-variant-numeric: tabular-nums;
-}
-.aitf-lock-answer:focus-visible {
-  outline: 2px solid var(--aitf-accent);
-  outline-offset: 1px;
-}
-.aitf-lock-go,
-.aitf-lock-back {
-  flex: none;
-  padding: 6px 14px;
-  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-  border-radius: 999px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.aitf-lock-go {
-  border-color: var(--aitf-accent);
-  background: var(--aitf-accent);
-  color: #fff;
-}
-.aitf-lock-back {
-  margin-inline-start: auto;
-  font-weight: 500;
-  opacity: 0.7;
-}
-.aitf-lock-puzzle[data-wrong] {
-  animation: aitf-shake 320ms ease-out;
-}
-@keyframes aitf-shake {
+@keyframes aitf-nudge {
   20% {
-    transform: translateX(-5px);
+    transform: translateX(-4px);
   }
   50% {
-    transform: translateX(4px);
+    transform: translateX(3px);
   }
   80% {
-    transform: translateX(-2px);
-  }
-}
-.aitf-lock[data-layout='cover'].aitf-lock-puzzle {
-  flex-direction: row;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-.aitf-lock[data-layout='cover'] .aitf-lock-back {
-  margin-inline-start: 0;
-}
-
-/* The pager. A pill fixed at the foot, out of the way of the site's own bars. */
-.aitf-pager-root {
-  position: fixed;
-  inset-inline: 0;
-  bottom: max(16px, env(safe-area-inset-bottom));
-  z-index: 2147483000;
-  display: flex;
-  justify-content: center;
-  pointer-events: none;
-}
-.aitf-pager {
-  --aitf-accent: #7c6cff;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 4px;
-  border: 1px solid rgba(127, 127, 127, 0.35);
-  border-radius: 999px;
-  background: rgba(20, 20, 24, 0.82);
-  color: #fff;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: 14px;
-  line-height: 1;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(12px);
-  pointer-events: auto;
-}
-@media (prefers-color-scheme: light) {
-  .aitf-pager {
-    background: rgba(255, 255, 255, 0.88);
-    color: #111;
-  }
-}
-.aitf-pager-step {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 36px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-}
-.aitf-pager-step:hover:not(:disabled) {
-  background: color-mix(in srgb, currentColor 10%, transparent);
-}
-.aitf-pager-step:focus-visible {
-  outline: 2px solid var(--aitf-accent);
-  outline-offset: -2px;
-}
-.aitf-pager-step:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-.aitf-pager-step[data-loading] .aitf-pager-word {
-  opacity: 0.7;
-}
-.aitf-pager-where {
-  padding: 0 10px;
-  font-variant-numeric: tabular-nums;
-  opacity: 0.85;
-}
-.aitf-pager-where small {
-  font-size: 12px;
-  opacity: 0.7;
-}
-@media (max-width: 420px) {
-  .aitf-pager-word {
-    display: none;
-  }
-  .aitf-pager-step {
-    padding: 0 12px;
-    font-size: 20px;
+    transform: translateX(-1px);
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .aitf-lock-puzzle[data-wrong] {
+  .aitf-lock[data-nudge] .aitf-lock-hint {
     animation: none;
   }
 }

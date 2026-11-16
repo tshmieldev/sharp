@@ -1,11 +1,10 @@
-// The lock on a post the filter let through. Two ways in, both deliberate:
-// press and hold for a moment, or answer a sum. What is behind the lock is
-// not shown; what is shown is enough to decide whether to bother: who, how
-// sure the filter was, and what kind of thing it is.
+// The lock on a post the filter let through. One way in, deliberate: press
+// and hold for a moment. What is behind the lock is not shown; what is shown
+// is enough to decide whether to bother: who, how sure the filter was, and
+// what kind of thing it is.
 import { render } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Lock as LockIcon } from '../x/icons';
-import { newPuzzle, solves, type Difficulty, type Puzzle } from './puzzle';
 
 export type LockProps = {
   /** Who or what: an author's name, a video's title. */
@@ -13,7 +12,6 @@ export type LockProps = {
   /** Short facts, each its own token: "88% likely fine", "photo", "long post". */
   facts: readonly string[];
   holdMs: number;
-  difficulty: Difficulty;
   onUnlock: () => void;
   /** `row` sits in a post's place; `cover` lies over a thumbnail. */
   layout?: 'row' | 'cover';
@@ -21,25 +19,21 @@ export type LockProps = {
   unsure?: boolean;
 };
 
-/** A press shorter than this was a tap, which asks for the sum instead. */
-const TAP_MS = 250;
+/** How long the "keep holding" nudge stays after a press let go too soon. */
+const NUDGE_MS = 900;
 
 export function Lock({
   title,
   facts,
   holdMs,
-  difficulty,
   onUnlock,
   layout = 'row',
   unsure = false,
 }: LockProps) {
-  const [mode, setMode] = useState<'hold' | 'puzzle'>('hold');
   const [progress, setProgress] = useState(0);
-  const [puzzle, setPuzzle] = useState<Puzzle | null>(null);
-  const [answer, setAnswer] = useState('');
-  const [wrong, setWrong] = useState(0);
-  const press = useRef<{ at: number; frame: number; pointer: number } | null>(null);
-  const input = useRef<HTMLInputElement>(null);
+  const [nudged, setNudged] = useState(false);
+  const press = useRef<{ at: number; frame: number; pointer: number | 'key' } | null>(null);
+  const nudge = useRef(0);
   const unlocked = useRef(false);
 
   const unlock = () => {
@@ -54,25 +48,24 @@ export function Lock({
     setProgress(0);
   };
 
-  useEffect(() => stop, []);
-  useEffect(() => {
-    if (mode === 'puzzle') input.current?.focus();
-  }, [mode, puzzle]);
+  useEffect(
+    () => () => {
+      stop();
+      clearTimeout(nudge.current);
+    },
+    [],
+  );
 
-  const openPuzzle = () => {
-    setPuzzle(newPuzzle(difficulty));
-    setAnswer('');
-    setMode('puzzle');
+  /** Let go early: say so, briefly. */
+  const letGoEarly = () => {
+    stop();
+    setNudged(true);
+    clearTimeout(nudge.current);
+    nudge.current = window.setTimeout(() => setNudged(false), NUDGE_MS);
   };
 
-  const onPointerDown = (event: PointerEvent) => {
-    if (event.button !== 0 || mode !== 'hold') return;
-    const target = event.currentTarget as HTMLElement;
-    try {
-      target.setPointerCapture(event.pointerId);
-    } catch {
-      // A synthetic event, or a pointer already gone: the hold still works.
-    }
+  const begin = (pointer: number | 'key') => {
+    if (press.current) return;
     const at = performance.now();
     const tick = () => {
       if (!press.current) return;
@@ -85,75 +78,40 @@ export function Lock({
       }
       press.current.frame = requestAnimationFrame(tick);
     };
-    press.current = { at, frame: requestAnimationFrame(tick), pointer: event.pointerId };
+    press.current = { at, frame: requestAnimationFrame(tick), pointer };
+  };
+
+  const onPointerDown = (event: PointerEvent) => {
+    if (event.button !== 0) return;
+    const target = event.currentTarget as HTMLElement;
+    try {
+      target.setPointerCapture(event.pointerId);
+    } catch {
+      // A synthetic event, or a pointer already gone: the hold still works.
+    }
+    begin(event.pointerId);
   };
   const onPointerUp = (event: PointerEvent) => {
-    const current = press.current;
-    if (!current || current.pointer !== event.pointerId) return;
-    const held = performance.now() - current.at;
-    stop();
-    if (held < TAP_MS) openPuzzle();
+    if (press.current?.pointer !== event.pointerId) return;
+    letGoEarly();
   };
   const onPointerCancel = () => stop();
 
-  const submit = (event: Event) => {
+  const isKey = (event: KeyboardEvent) => event.key === 'Enter' || event.key === ' ';
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (!isKey(event)) return;
     event.preventDefault();
-    if (!puzzle) return;
-    if (solves(puzzle, answer)) {
-      unlock();
-      return;
-    }
-    setWrong((count) => count + 1);
-    setPuzzle(newPuzzle(difficulty));
-    setAnswer('');
+    event.stopPropagation();
+    if (!event.repeat) begin('key');
+  };
+  const onKeyUp = (event: KeyboardEvent) => {
+    if (!isKey(event) || press.current?.pointer !== 'key') return;
+    event.preventDefault();
+    letGoEarly();
   };
 
   const seconds =
     holdMs >= 1000 ? `${(holdMs / 1000).toFixed(holdMs % 1000 ? 1 : 0)} s` : `${holdMs} ms`;
-
-  if (mode === 'puzzle' && puzzle) {
-    return (
-      <form
-        class="aitf-lock aitf-lock-puzzle"
-        data-layout={layout}
-        data-wrong={wrong || undefined}
-        key={wrong}
-        onSubmit={submit}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <span class="aitf-lock-sum" aria-live="polite">
-          {puzzle.question} =
-        </span>
-        <input
-          ref={input}
-          class="aitf-lock-answer"
-          type="text"
-          inputMode="numeric"
-          autoComplete="off"
-          aria-label={`Answer to ${puzzle.question}`}
-          value={answer}
-          onInput={(event) => setAnswer(event.currentTarget.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') {
-              event.preventDefault();
-              setMode('hold');
-            }
-          }}
-        />
-        <button type="submit" class="aitf-lock-go">
-          Open
-        </button>
-        <button
-          type="button"
-          class="aitf-lock-back"
-          aria-label="Back to the lock"
-          onClick={() => setMode('hold')}
-        >
-          Hold instead
-        </button>
-      </form>
-    );
-  }
 
   return (
     <div
@@ -161,9 +119,10 @@ export function Lock({
       data-layout={layout}
       data-unsure={unsure ? 'true' : undefined}
       data-holding={progress > 0 ? 'true' : undefined}
+      data-nudge={nudged && progress === 0 ? 'true' : undefined}
       role="button"
       tabIndex={0}
-      aria-label={`Locked: ${title}. Hold for ${seconds} to open, or press Enter for a sum.`}
+      aria-label={`Locked: ${title}. Hold for ${seconds} to open.`}
       style={{ '--aitf-hold': progress }}
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
@@ -175,13 +134,8 @@ export function Lock({
         event.preventDefault();
         event.stopPropagation();
       }}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          event.stopPropagation();
-          openPuzzle();
-        }
-      }}
+      onKeyDown={onKeyDown}
+      onKeyUp={onKeyUp}
     >
       <span class="aitf-lock-ring" aria-hidden="true">
         <LockIcon />
@@ -199,7 +153,7 @@ export function Lock({
         )}
       </span>
       <span class="aitf-lock-hint" aria-hidden="true">
-        {progress > 0 ? 'Hold…' : `Hold ${seconds}`}
+        {progress > 0 ? 'Hold…' : nudged ? 'Keep holding' : `Hold ${seconds}`}
       </span>
     </div>
   );

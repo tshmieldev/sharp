@@ -4,7 +4,6 @@ import type { PublicSettings } from '../common/settings';
 import { Check, Inspect, Mark, Query } from './icons';
 import { articleSelector, cellOf } from './extract';
 import { Lock } from '../unfry/lock';
-import type { Difficulty } from '../unfry/puzzle';
 
 export type HiddenStyle = PublicSettings['hideStyle'] | 'remove';
 /** What the reader can do about a verdict they have already overruled by revealing. */
@@ -38,18 +37,15 @@ export type PostState =
       inspect?: () => void;
     }
   | { kind: 'revealed'; recourse: Recourse; inspect?: () => void }
-  /** Unfry: let through, but behind a held press or a sum. */
+  /** Unfry: let through, but behind a held press. */
   | {
       kind: 'locked';
       title: string;
       facts: readonly string[];
       unsure: boolean;
       holdMs: number;
-      difficulty: Difficulty;
       onUnlock: () => void;
-    }
-  /** Unfry: on another page. Keeps its height, shows nothing. */
-  | { kind: 'blank' };
+    };
 
 /** A post's cell from the moment Sharp tells X "not interested" until X has
  *  recycled it. X answers by drawing a "Thanks, we'll show fewer posts like
@@ -78,7 +74,7 @@ const signatureOf = (state: PostState) =>
       : state.kind === 'kept'
         ? `kept:${state.score ?? ''}:${state.threshold ?? ''}:${state.hideFrom ?? ''}`
         : state.kind === 'locked'
-          ? `locked:${state.title}:${state.facts.join('|')}:${state.unsure}:${state.holdMs}:${state.difficulty}`
+          ? `locked:${state.title}:${state.facts.join('|')}:${state.unsure}:${state.holdMs}`
           : state.kind;
 
 export const percent = (value: number) => `${Math.round(value * 100)}%`;
@@ -297,16 +293,12 @@ export function apply(article: HTMLElement, state: PostState, onReveal: () => vo
   if (getComputedStyle(article).flexDirection.startsWith('column')) root.style.flex = '0 0 auto';
   if (state.kind === 'revealed') article.dataset.aitfRevealed = '';
   else if (state.kind === 'kept') article.dataset.aitfKept = '';
-  else if (state.kind === 'locked' || state.kind === 'blank')
-    article.dataset.aitfHidden = state.kind;
+  else if (state.kind === 'locked') article.dataset.aitfHidden = 'locked';
   else article.dataset.aitfHidden = state.kind === 'pending' ? 'pending' : state.style;
   // The tint belongs to the cell: the article sits inside X's padding.
   if (state.kind === 'hidden' && state.unsure)
     cellOf(article)?.setAttribute('data-aitf-unsure', '');
   mounted.set(article, { root, signature });
-
-  // Blank draws nothing: the stylesheet keeps the post's box and empties it.
-  if (state.kind === 'blank') return;
 
   if (state.kind === 'locked') {
     render(
@@ -315,7 +307,6 @@ export function apply(article: HTMLElement, state: PostState, onReveal: () => vo
         facts={state.facts}
         unsure={state.unsure}
         holdMs={state.holdMs}
-        difficulty={state.difficulty}
         onUnlock={state.onUnlock}
       />,
       root,

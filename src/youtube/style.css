@@ -213,8 +213,7 @@ html[data-aitf-yt-grey-content] #player {
 }
 
 /* Unfry. A locked video keeps its title and loses its picture; the lock lies
-   over the thumbnail. A video on another page keeps its box and shows nothing,
-   so the grid's height, and YouTube's idea of where its end is, do not move. */
+   over the thumbnail. */
 [data-aitf-yt-locked]
   :is(
     ytd-thumbnail,
@@ -236,10 +235,6 @@ html[data-aitf-yt-grey-content] #player {
     .video-thumbnail-container-fluid,
     ytd-playlist-thumbnail
   ) {
-  pointer-events: none !important;
-}
-[data-aitf-yt-blank] {
-  visibility: hidden !important;
   pointer-events: none !important;
 }
 .aitf-yt-lock {

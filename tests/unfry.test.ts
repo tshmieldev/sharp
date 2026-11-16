@@ -1,9 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'preact/test-utils';
 import { afterEach, expect, it, vi } from 'vitest';
-import { newPuzzle, solves } from '../src/unfry/puzzle';
 import { mountLock } from '../src/unfry/lock';
-import { createPager } from '../src/unfry/pager';
 import { cards, describe as describeCard, UnfryYouTube } from '../src/youtube/unfry';
 
 // jsdom has no pointer events, and Preact picks an event's name by asking the
@@ -11,31 +9,12 @@ import { cards, describe as describeCard, UnfryYouTube } from '../src/youtube/un
 for (const name of ['onpointerdown', 'onpointerup', 'onpointercancel', 'onlostpointercapture'])
   if (!(name in HTMLElement.prototype))
     Object.defineProperty(HTMLElement.prototype, name, { value: null, writable: true });
-window.scrollTo = vi.fn();
 
 afterEach(() => {
   document.body.innerHTML = '';
   vi.useRealTimers();
-});
-
-it('deals sums a tired reader can still do, and checks only the number', () => {
-  const fixed = (value: number) => () => value;
-  expect(newPuzzle('easy', fixed(0))).toEqual({ question: '2 + 2', answer: 4 });
-  expect(newPuzzle('easy', fixed(0.999))).toEqual({ question: '9 + 9', answer: 18 });
-  for (const difficulty of ['easy', 'medium', 'hard'] as const) {
-    for (let round = 0; round < 200; round++) {
-      const puzzle = newPuzzle(difficulty);
-      expect(Number.isInteger(puzzle.answer)).toBe(true);
-      expect(puzzle.answer).toBeGreaterThan(0);
-      expect(puzzle.question).toMatch(/^\d+ [+−×] \d+( − \d+)?$/);
-    }
-  }
-  const puzzle = { question: '7 + 5', answer: 12 };
-  expect(solves(puzzle, ' 12 ')).toBe(true);
-  expect(solves(puzzle, '+12')).toBe(true);
-  expect(solves(puzzle, '')).toBe(false);
-  expect(solves(puzzle, '12a')).toBe(false);
-  expect(solves(puzzle, '13')).toBe(false);
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 function lock(onUnlock = vi.fn()) {
@@ -45,7 +24,6 @@ function lock(onUnlock = vi.fn()) {
     title: 'Alice',
     facts: ['88% likely fine', 'photo'],
     holdMs: 1000,
-    difficulty: 'easy',
     onUnlock,
   });
   return { root, onUnlock, button: root.querySelector<HTMLElement>('.aitf-lock')! };
@@ -54,8 +32,7 @@ function lock(onUnlock = vi.fn()) {
 const pointer = (type: string, pointerId = 1) =>
   new (window.PointerEvent ?? MouseEvent)(type, { bubbles: true, button: 0, pointerId } as never);
 
-it('opens after a held press, and not after a shorter one', () => {
-  vi.useFakeTimers();
+function clock() {
   let now = 0;
   vi.spyOn(performance, 'now').mockImplementation(() => now);
   const frames: FrameRequestCallback[] = [];
@@ -64,112 +41,75 @@ it('opens after a held press, and not after a shorter one', () => {
     return frames.length;
   });
   vi.stubGlobal('cancelAnimationFrame', () => {});
+  return {
+    set(value: number) {
+      now = value;
+    },
+    // Preact queues its effect flush on the same frame; run everything due.
+    frame: () =>
+      act(() => {
+        for (const callback of frames.splice(0)) callback(now);
+      }),
+  };
+}
+
+it('opens after a held press, and not after a shorter one', () => {
+  vi.useFakeTimers();
+  const time = clock();
   const { button, onUnlock } = lock();
   expect(button.textContent).toContain('Alice');
   expect(button.textContent).toContain('88% likely fine');
   expect(button.textContent).toContain('Hold 1 s');
 
-  // Let go early: nothing opens, and since it was longer than a tap, no sum.
+  // Let go early: nothing opens, and the hint says to keep holding.
   act(() => {
     button.dispatchEvent(pointer('pointerdown'));
   });
-  now = 600;
-  act(() => frames.shift()!(now));
+  time.set(600);
+  time.frame();
+  expect(button.hasAttribute('data-holding')).toBe(true);
   act(() => {
     button.dispatchEvent(pointer('pointerup'));
   });
   expect(onUnlock).not.toHaveBeenCalled();
-  expect(document.querySelector('.aitf-lock-puzzle')).toBeNull();
+  expect(button.textContent).toContain('Keep holding');
+  act(() => {
+    vi.advanceTimersByTime(1000);
+  });
+  expect(button.textContent).toContain('Hold 1 s');
 
   // Hold the full second.
   act(() => {
     button.dispatchEvent(pointer('pointerdown'));
   });
-  now = 1700;
-  act(() => frames.shift()!(now));
+  time.set(1700);
+  time.frame();
   expect(onUnlock).toHaveBeenCalledTimes(1);
-  vi.unstubAllGlobals();
 });
 
-it('a tap asks for a sum; a wrong answer deals another, the right one opens', () => {
-  let now = 0;
-  vi.spyOn(performance, 'now').mockImplementation(() => now);
-  vi.stubGlobal('requestAnimationFrame', () => 1);
-  vi.stubGlobal('cancelAnimationFrame', () => {});
-  const { root, button, onUnlock } = lock();
+it('a held Space or Enter opens it too, and a tap of the key does not', () => {
+  const time = clock();
+  const { button, onUnlock } = lock();
+  const key = (type: string, repeat = false) =>
+    new KeyboardEvent(type, { key: ' ', bubbles: true, cancelable: true, repeat });
   act(() => {
-    button.dispatchEvent(pointer('pointerdown'));
-  });
-  now = 80;
-  act(() => {
-    button.dispatchEvent(pointer('pointerup'));
-  });
-  const form = root.querySelector<HTMLFormElement>('.aitf-lock-puzzle')!;
-  expect(form).not.toBeNull();
-  const question = root.querySelector('.aitf-lock-sum')!.textContent!;
-  const [a, b] = question.match(/\d+/g)!.map(Number);
-  const input = root.querySelector<HTMLInputElement>('.aitf-lock-answer')!;
-  input.value = String(a! + b! + 1);
-  act(() => {
-    input.dispatchEvent(new Event('input', { bubbles: true }));
+    button.dispatchEvent(key('keydown'));
   });
   act(() => {
-    root
-      .querySelector('form')!
-      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    button.dispatchEvent(key('keydown', true));
+  });
+  time.set(300);
+  time.frame();
+  act(() => {
+    button.dispatchEvent(key('keyup'));
   });
   expect(onUnlock).not.toHaveBeenCalled();
-  expect(root.querySelector('.aitf-lock-puzzle')?.getAttribute('data-wrong')).toBe('1');
-  const again = root.querySelector('.aitf-lock-sum')!.textContent!;
-  const [c, d] = again.match(/\d+/g)!.map(Number);
-  const second = root.querySelector<HTMLInputElement>('.aitf-lock-answer')!;
-  second.value = String(c! + d!);
   act(() => {
-    second.dispatchEvent(new Event('input', { bubbles: true }));
+    button.dispatchEvent(key('keydown'));
   });
-  act(() => {
-    root
-      .querySelector('form')!
-      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-  });
+  time.set(1400);
+  time.frame();
   expect(onUnlock).toHaveBeenCalledTimes(1);
-  vi.unstubAllGlobals();
-});
-
-it('draws the pager once and takes it down', () => {
-  const pager = createPager();
-  const onNext = vi.fn();
-  act(() =>
-    pager.update({
-      page: 2,
-      hasPrev: true,
-      hasNext: false,
-      shown: 1,
-      size: 3,
-      onPrev: vi.fn(),
-      onNext,
-    }),
-  );
-  const nav = document.querySelector('.aitf-pager')!;
-  expect(nav.textContent).toContain('Page 2');
-  expect(nav.textContent).toContain('1/3');
-  act(() => nav.querySelectorAll<HTMLButtonElement>('button')[1]!.click());
-  expect(onNext).toHaveBeenCalled();
-  act(() =>
-    pager.update({
-      page: 3,
-      hasPrev: true,
-      hasNext: true,
-      shown: 3,
-      size: 3,
-      onPrev: vi.fn(),
-      onNext,
-    }),
-  );
-  expect(document.querySelectorAll('.aitf-pager')).toHaveLength(1);
-  expect(document.querySelector('.aitf-pager')!.textContent).not.toContain('/3');
-  act(() => pager.destroy());
-  expect(document.querySelector('.aitf-pager')).toBeNull();
 });
 
 const video = (id: string, title: string) =>
@@ -191,72 +131,36 @@ it('finds YouTube cards once each and reads their title, channel and length', ()
   });
 });
 
-it('locks every video on the page, blanks the rest, and turns pages', () => {
-  document.body.innerHTML = `<ytd-rich-grid-renderer>${['a', 'b', 'c', 'd', 'e'].map((id) => video(id, `Video ${id}`)).join('')}</ytd-rich-grid-renderer>`;
+it('locks every video, blocks clicks on a locked one, and lets an opened one go', () => {
+  const time = clock();
+  document.body.innerHTML = `<ytd-rich-grid-renderer>${['a', 'b', 'c'].map((id) => video(id, `Video ${id}`)).join('')}</ytd-rich-grid-renderer>`;
   const unfry = new UnfryYouTube();
-  const settings = {
-    youtubeEnabled: true,
-    unfryYoutube: true,
-    unfryHoldMs: 1000,
-    unfryPuzzle: 'easy' as const,
-    unfryPageSize: 2,
-  };
-  act(() => unfry.start(settings));
+  act(() => unfry.start({ youtubeEnabled: true, unfryYoutube: true, unfryHoldMs: 1000 }));
   const items = [...document.querySelectorAll('ytd-rich-item-renderer')];
-  expect(items.map((item) => item.hasAttribute('data-aitf-yt-locked'))).toEqual([
-    true,
-    true,
-    false,
-    false,
-    false,
-  ]);
-  expect(items.map((item) => item.hasAttribute('data-aitf-yt-blank'))).toEqual([
-    false,
-    false,
-    true,
-    true,
-    true,
-  ]);
+  expect(items.map((item) => item.hasAttribute('data-aitf-yt-locked'))).toEqual([true, true, true]);
   expect(items[0]!.querySelector('.aitf-yt-lock .aitf-lock-title')?.textContent).toBe('Video a');
-  expect(document.querySelector('.aitf-pager')!.textContent).toContain('Page 1');
 
-  // A click on a locked card goes nowhere and asks for the sum instead.
+  // A click on a locked card goes nowhere.
   const link = items[0]!.querySelector<HTMLAnchorElement>('#video-title')!;
   const click = new MouseEvent('click', { bubbles: true, cancelable: true });
   act(() => {
     link.dispatchEvent(click);
   });
   expect(click.defaultPrevented).toBe(true);
-  expect(items[0]!.querySelector('.aitf-lock-puzzle')).not.toBeNull();
 
-  // Next page: the third and fourth, the first two blank.
-  act(() => document.querySelectorAll<HTMLButtonElement>('.aitf-pager button')[1]!.click());
-  expect(items.map((item) => item.hasAttribute('data-aitf-yt-blank'))).toEqual([
-    true,
-    true,
-    false,
-    false,
-    true,
-  ]);
-  expect(items.map((item) => item.hasAttribute('data-aitf-yt-locked'))).toEqual([
-    false,
-    false,
-    true,
-    true,
-    false,
-  ]);
-  expect(document.querySelector('.aitf-pager')!.textContent).toContain('Page 2');
-  act(() => document.querySelectorAll<HTMLButtonElement>('.aitf-pager button')[0]!.click());
-  expect(items.map((item) => item.hasAttribute('data-aitf-yt-blank'))).toEqual([
-    false,
-    false,
-    true,
-    true,
-    true,
-  ]);
+  // Held: open, and it stays open on the next scan.
+  const button = items[0]!.querySelector<HTMLElement>('.aitf-lock')!;
+  act(() => {
+    button.dispatchEvent(pointer('pointerdown'));
+  });
+  time.set(1200);
+  time.frame();
+  expect(items[0]!.hasAttribute('data-aitf-yt-locked')).toBe(false);
+  expect(items[0]!.querySelector('.aitf-yt-lock')).toBeNull();
+  act(() => unfry.scan());
+  expect(items[0]!.hasAttribute('data-aitf-yt-locked')).toBe(false);
+  expect(items[1]!.hasAttribute('data-aitf-yt-locked')).toBe(true);
 
   act(() => unfry.stop());
-  expect(
-    document.querySelector('[data-aitf-yt-locked], [data-aitf-yt-blank], .aitf-pager'),
-  ).toBeNull();
+  expect(document.querySelector('[data-aitf-yt-locked], .aitf-yt-lock')).toBeNull();
 });
