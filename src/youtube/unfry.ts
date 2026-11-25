@@ -112,6 +112,7 @@ export class UnfryYouTube {
     this.running = false;
     this.observer?.disconnect();
     window.clearTimeout(this.scanTimer);
+    this.scanTimer = 0;
     window.clearInterval(this.pollTimer);
     document.removeEventListener('click', this.onClick, true);
     document.removeEventListener('auxclick', this.onClick, true);
@@ -180,6 +181,9 @@ export class UnfryYouTube {
     root.className = 'aitf-yt-lock';
     thumb.append(root);
     card.element.setAttribute(LOCKED, '');
+    // A preview that started before the card was locked stops now.
+    for (const media of card.element.querySelectorAll('video, audio'))
+      (media as HTMLMediaElement).pause();
     const unmount = mountLock(root, {
       layout: 'cover',
       // The title and channel are printed beside the thumbnail already.

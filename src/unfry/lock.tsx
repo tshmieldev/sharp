@@ -26,7 +26,7 @@ const NUDGE_MS = 900;
  *  then lands on whatever the lock was covering, and the page reads that as a
  *  click: X opens the post, YouTube plays the video. The release belongs to
  *  the lock, so the click it makes, and a long press's menu, go nowhere. */
-function swallowRelease() {
+function swallowRelease(pointerId: number) {
   const kinds = ['click', 'auxclick', 'contextmenu'] as const;
   const ends = ['pointerup', 'pointercancel'] as const;
   const swallow = (event: Event) => {
@@ -40,7 +40,10 @@ function swallowRelease() {
     for (const end of ends) window.removeEventListener(end, released, true);
   };
   // The click follows the release at once; a moment covers a slow device.
-  const released = () => {
+  // Only the finger that opened the lock counts: another one lifting says
+  // nothing about when this one will.
+  const released = (event: PointerEvent) => {
+    if (event.pointerId !== pointerId) return;
     clearTimeout(timer);
     timer = window.setTimeout(off, 400);
   };
@@ -67,7 +70,7 @@ export function Lock({
   const unlock = (by: number | 'key') => {
     if (unlocked.current) return;
     unlocked.current = true;
-    if (by !== 'key') swallowRelease();
+    if (by !== 'key') swallowRelease(by);
     onUnlock();
   };
 
@@ -133,6 +136,10 @@ export function Lock({
     event.stopPropagation();
     if (!event.repeat) begin('key');
   };
+  // A key held down while focus moves away never comes back up here.
+  const onBlur = () => {
+    if (press.current?.pointer === 'key') stop();
+  };
   const onKeyUp = (event: KeyboardEvent) => {
     if (!isKey(event) || press.current?.pointer !== 'key') return;
     event.preventDefault();
@@ -165,6 +172,7 @@ export function Lock({
       }}
       onKeyDown={onKeyDown}
       onKeyUp={onKeyUp}
+      onBlur={onBlur}
     >
       <span class="aitf-lock-ring" aria-hidden="true">
         <LockIcon />

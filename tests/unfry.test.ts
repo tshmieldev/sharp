@@ -29,8 +29,12 @@ function lock(onUnlock = vi.fn()) {
   return { root, onUnlock, button: root.querySelector<HTMLElement>('.aitf-lock')! };
 }
 
-const pointer = (type: string, pointerId = 1) =>
-  new (window.PointerEvent ?? MouseEvent)(type, { bubbles: true, button: 0, pointerId } as never);
+// jsdom has no PointerEvent either: a mouse event that carries the pointer's id.
+const pointer = (type: string, pointerId = 1) => {
+  const event = new MouseEvent(type, { bubbles: true, button: 0 });
+  Object.defineProperty(event, 'pointerId', { value: pointerId });
+  return event;
+};
 
 function clock() {
   let now = 0;
@@ -215,16 +219,18 @@ it('a locked YouTube card plays no preview, on hover or in the feed', () => {
 
   const unfry = new UnfryYouTube();
   act(() => unfry.start({ youtubeEnabled: true, unfryYoutube: true, unfryHoldMs: 1000 }));
+  // Whatever was already playing stops as the card locks.
+  expect(pause).toHaveBeenCalledTimes(1);
   thumb.querySelector('.aitf-lock')!.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
   expect(hovered).not.toHaveBeenCalled();
   media.dispatchEvent(new Event('play'));
-  expect(pause).toHaveBeenCalledTimes(1);
+  expect(pause).toHaveBeenCalledTimes(2);
 
   act(() => unfry.stop());
   thumb.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
   expect(hovered).toHaveBeenCalledTimes(1);
   media.dispatchEvent(new Event('play'));
-  expect(pause).toHaveBeenCalledTimes(1);
+  expect(pause).toHaveBeenCalledTimes(2);
 });
 
 it('locks a Short in a shelf as one card', () => {
@@ -237,4 +243,43 @@ it('locks a Short in a shelf as one card', () => {
   expect(cards().map((card) => [card.element.tagName.toLowerCase(), card.key])).toEqual([
     ['ytm-shorts-lockup-view-model-v2', '/shorts/xyz'],
   ]);
+});
+
+it('only the finger that opened the lock ends its release', () => {
+  vi.useFakeTimers();
+  const time = clock();
+  const { button } = lock();
+  const behind = document.createElement('a');
+  document.body.append(behind);
+  act(() => {
+    button.dispatchEvent(pointer('pointerdown', 1));
+  });
+  time.set(1100);
+  time.frame();
+  // A second finger lifts, and time passes: the first is still down.
+  behind.dispatchEvent(pointer('pointerup', 2));
+  vi.advanceTimersByTime(500);
+  behind.dispatchEvent(pointer('pointerup', 1));
+  const release = new MouseEvent('click', { bubbles: true, cancelable: true });
+  behind.dispatchEvent(release);
+  expect(release.defaultPrevented).toBe(true);
+  vi.advanceTimersByTime(500);
+});
+
+it('a key hold stops when focus moves away', () => {
+  const time = clock();
+  const { button, onUnlock } = lock();
+  act(() => {
+    button.dispatchEvent(
+      new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true }),
+    );
+  });
+  time.set(300);
+  time.frame();
+  act(() => {
+    button.dispatchEvent(new FocusEvent('blur'));
+  });
+  time.set(1500);
+  time.frame();
+  expect(onUnlock).not.toHaveBeenCalled();
 });

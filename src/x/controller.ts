@@ -35,6 +35,8 @@ type RecordState = {
 /** One post's drawing, decided but not yet drawn. */
 type Planned = {
   article: HTMLElement;
+  /** The record's key in `records`. */
+  key: string;
   record: RecordState;
   state: view.PostState;
   reveal: () => void;
@@ -438,6 +440,7 @@ export class TimelineController {
       const apply = (state: view.PostState) =>
         plan.push({
           article,
+          key,
           record: settled,
           state,
           reveal: () => {
@@ -564,12 +567,14 @@ export class TimelineController {
     for (const item of plan) {
       if ((item.state.kind !== 'show' && item.state.kind !== 'kept') || item.record.unlocked)
         continue;
-      const { record, article } = item;
+      const { record, article, key } = item;
       const verdict =
         record.phase.type === 'decided' ? readVerdict(settings, record.phase.verdict) : null;
       const facts: string[] = [];
+      // How likely fine, whatever the verdict: an allowed author's post can
+      // carry a score the filter would have hidden.
       if (verdict?.score !== undefined)
-        facts.push(`${view.percent(view.sureness(verdict.score, settings.hideFrom))} likely fine`);
+        facts.push(`${view.percent(1 - verdict.score)} likely fine`);
       const photos = extract.images(article, 4).length;
       const video = article.querySelector('video') !== null;
       if (video) facts.push('video');
@@ -583,8 +588,11 @@ export class TimelineController {
         facts,
         unsure: false,
         holdMs: settings.unfryHoldMs,
+        // By id, not by record: a refresh replaces the records while a lock
+        // drawn for the old one can stay on the page.
         onUnlock: () => {
-          record.unlocked = true;
+          const current = this.records.get(key);
+          if (current) current.unlocked = true;
           this.scan();
         },
       };
