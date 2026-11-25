@@ -29,6 +29,17 @@ type RecordState = {
   attempts: number;
   revealed: boolean;
   counted: boolean;
+  /** Unfry: the reader opened this post's lock. Holds for the tab. */
+  unlocked: boolean;
+};
+/** One post's drawing, decided but not yet drawn. */
+type Planned = {
+  article: HTMLElement;
+  /** The record's key in `records`. */
+  key: string;
+  record: RecordState;
+  state: view.PostState;
+  reveal: () => void;
 };
 // A post is identified by its id alone. Expanding "Show more" rewrites the
 // visible text without making it a different post, and a decided post must
@@ -312,6 +323,7 @@ export class TimelineController {
           attempts: 0,
           revealed: false,
           counted: false,
+          unlocked: false,
         });
       }
       this.scan();
@@ -385,6 +397,9 @@ export class TimelineController {
     const focal = extract.focalArticle(thread);
     const waitingForFocal = thread && !focal && Date.now() - this.openedAt < 2500;
     const live = new Set<string>();
+    // Decided first, drawn after: Unfry may still lock what a post would
+    // otherwise show.
+    const plan: Planned[] = [];
     for (const article of document.querySelectorAll<HTMLElement>(extract.articleSelector)) {
       const post = extract.describe(
         article,
@@ -411,14 +426,27 @@ export class TimelineController {
       );
       let record = this.records.get(key);
       if (!record) {
-        record = { post, phase: { type: 'queued' }, attempts: 0, revealed: false, counted: false };
+        record = {
+          post,
+          phase: { type: 'queued' },
+          attempts: 0,
+          revealed: false,
+          counted: false,
+          unlocked: false,
+        };
         this.records.set(key, record);
       }
       const settled = record;
       const apply = (state: view.PostState) =>
-        view.apply(article, state, () => {
-          settled.revealed = true;
-          this.scan();
+        plan.push({
+          article,
+          key,
+          record: settled,
+          state,
+          reveal: () => {
+            settled.revealed = true;
+            this.scan();
+          },
         });
       // A scored verdict is read against the reader's lines as they stand now,
       // so moving either one re-reads what is on the page for free.
@@ -505,6 +533,16 @@ export class TimelineController {
         apply({ kind: 'show' });
       }
     }
+    // Unfry works the timelines: never a thread the reader opened, never the
+    // pages they filled themselves.
+    const unfryHere =
+      this.settings.unfryX &&
+      !thread &&
+      !/^\/(i\/bookmarks|i\/history|bookmarks|notifications|messages|settings)(?:\/|$)/.test(
+        this.path,
+      );
+    if (unfryHere) this.unfry(plan);
+    for (const item of plan) view.apply(item.article, item.state, item.reveal);
     // Keep settled identities for remounts, but bound memory during long scrolling sessions.
     if (this.records.size > 1000) {
       for (const [key, record] of this.records) {
@@ -519,6 +557,46 @@ export class TimelineController {
     this.syncFeedback();
     this.scheduleFlush();
     this.restoreAnchor();
+  }
+
+  /** Unfry. Every post the filter let through arrives locked, with enough on
+   *  the lock to decide whether to bother, until the reader opens it. Hidden
+   *  posts keep their banner; posts still being judged keep their placeholder. */
+  private unfry(plan: Planned[]) {
+    const settings = this.settings!;
+    for (const item of plan) {
+      if ((item.state.kind !== 'show' && item.state.kind !== 'kept') || item.record.unlocked)
+        continue;
+      const { record, article, key } = item;
+      const verdict =
+        record.phase.type === 'decided' ? readVerdict(settings, record.phase.verdict) : null;
+      const facts: string[] = [];
+      // How likely fine, whatever the verdict: an allowed author's post can
+      // carry a score the filter would have hidden.
+      if (verdict?.score !== undefined)
+        facts.push(`${view.percent(1 - verdict.score)} likely fine`);
+      const photos = extract.images(article, 4).length;
+      const video = article.querySelector('video') !== null;
+      if (video) facts.push('video');
+      else if (photos > 1) facts.push(`${photos} photos`);
+      else if (photos === 1) facts.push('photo');
+      if (record.post.text.length > 280) facts.push('long post');
+      if (record.post.context) facts.push('reply');
+      item.state = {
+        kind: 'locked',
+        title: extract.author(article).name,
+        facts,
+        unsure: false,
+        holdMs: settings.unfryHoldMs,
+        // By id, not by record: a refresh replaces the records while a lock
+        // drawn for the old one can stay on the page.
+        onUnlock: () => {
+          const current = this.records.get(key);
+          if (current) current.unlocked = true;
+          this.scan();
+        },
+      };
+    }
   }
 
   /** The post at the top of the viewport, by id, with its offset. */

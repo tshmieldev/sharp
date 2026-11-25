@@ -211,3 +211,56 @@ html[data-aitf-yt-grey-content] .video-thumbnail-container img,
 html[data-aitf-yt-grey-content] #player {
   filter: grayscale(1) !important;
 }
+
+/* Unfry. A locked video keeps its title and loses its picture, and every badge
+   and stack edge drawn on it; the lock lies over the thumbnail. */
+[data-aitf-yt-locked]
+  :is(
+    ytd-thumbnail,
+    yt-thumbnail-view-model,
+    ytm-thumbnail-cover,
+    .video-thumbnail-container,
+    .video-thumbnail-container-fluid,
+    ytd-playlist-thumbnail
+  )
+  > :not(.aitf-yt-lock) {
+  visibility: hidden !important;
+}
+[data-aitf-yt-locked]
+  :is(
+    ytd-thumbnail,
+    yt-thumbnail-view-model,
+    ytm-thumbnail-cover,
+    .video-thumbnail-container,
+    .video-thumbnail-container-fluid,
+    ytd-playlist-thumbnail
+  ) {
+  pointer-events: none !important;
+}
+/* The phone site plays a card in the feed as it scrolls past, in a portal of
+   its own over the thumbnail. A locked card plays nothing. */
+[data-aitf-yt-locked] :is(#video-preview-portal, ytm-video-preview, ytd-video-preview) {
+  display: none !important;
+}
+.aitf-yt-lock {
+  position: absolute;
+  inset: 0;
+  /* Above the hidden picture, below the page's own fixed bars: the phone
+     site's tab bar sits at 3. */
+  z-index: 1;
+  container-type: inline-size;
+  border-radius: inherit;
+  pointer-events: auto;
+  font-family: 'Roboto', 'YouTube Sans', Arial, sans-serif;
+  color: #fff;
+}
+.aitf-yt-lock .aitf-lock[data-layout='cover'] {
+  background: rgba(0, 0, 0, 0.72);
+}
+/* A sidebar thumbnail is too small for words: the ring alone says it. */
+@container (max-width: 200px) {
+  .aitf-yt-lock .aitf-lock-text,
+  .aitf-yt-lock .aitf-lock-hint {
+    display: none;
+  }
+}

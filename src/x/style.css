@@ -1030,3 +1030,8 @@ html[data-aitf-motion='reduced'] .aitf-inspector {
   padding-block: 0 !important;
   border-bottom: 0 !important;
 }
+
+/* Unfry. A locked post is its lock and nothing else. */
+article[data-aitf-hidden='locked'] > :not(.aitf-slot) {
+  display: none !important;
+}

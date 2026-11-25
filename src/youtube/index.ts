@@ -1,6 +1,8 @@
 import './style.css';
+import '../unfry/style.css';
 import { request } from '../common/messages';
 import type { PublicSettings } from '../common/settings';
+import { UnfryYouTube } from './unfry';
 
 /** Each switch is one attribute on <html>; the stylesheet does the hiding. */
 export const flags = {
@@ -13,7 +15,7 @@ export const flags = {
 const THUMBNAILS = 'aitfYtThumbs';
 export type YouTubeSettings = Pick<
   PublicSettings,
-  keyof typeof flags | 'youtubeEnabled' | 'thumbnails'
+  keyof typeof flags | 'youtubeEnabled' | 'thumbnails' | 'unfryYoutube' | 'unfryHoldMs'
 >;
 
 export function apply(settings: YouTubeSettings, root: HTMLElement = document.documentElement) {
@@ -33,17 +35,25 @@ const off: YouTubeSettings = {
   hideComments: false,
   youtubeGreyscaleUi: false,
   youtubeGreyscaleContent: false,
+  unfryYoutube: false,
+  unfryHoldMs: 1000,
 };
 
 /** Importing a site entry must not install listeners or touch the page. */
 export function startYouTube(send: typeof request = request) {
   let disposed = false;
   let revision = 0;
+  const unfry = new UnfryYouTube();
+  const settle = (settings: YouTubeSettings) => {
+    apply(settings);
+    if (settings.youtubeEnabled && settings.unfryYoutube) unfry.start(settings);
+    else unfry.stop();
+  };
   const refresh = async () => {
     const current = ++revision;
     try {
       const settings = await send({ type: 'GET_PUBLIC_SETTINGS' });
-      if (!disposed && current === revision) apply(settings);
+      if (!disposed && current === revision) settle(settings);
     } catch {
       // An invalidated extension context cannot recover without reloading the tab.
       dispose();
@@ -61,7 +71,7 @@ export function startYouTube(send: typeof request = request) {
     chrome.storage?.onChanged?.removeListener(onStorage);
     window.removeEventListener('pagehide', onPageHide);
     window.removeEventListener('pageshow', onPageShow);
-    apply(off);
+    settle(off);
   };
   const onPageShow = () => void refresh();
   chrome.storage?.onChanged?.addListener(onStorage);

@@ -1,4 +1,5 @@
 import { Segmented, ToggleRow, type SettingsEditor } from './ui';
+import { UnfryGroup } from './Unfry';
 
 const thumbnailOptions = [
   { value: 'shown', label: 'Shown' },
@@ -51,6 +52,8 @@ export function YouTubePanel({ settings, update, tab }: SettingsEditor & { tab: 
           onChange={(value) => update('hideComments', value)}
         />
       </section>
+      <UnfryGroup settings={settings} update={update} site="youtube" />
+
       <section class="group">
         <h2>Thumbnails</h2>
         <Segmented

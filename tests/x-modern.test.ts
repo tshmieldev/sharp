@@ -91,3 +91,36 @@ it('still reads the old client', () => {
   });
   expect(extract.cellOf(article)?.getAttribute('data-testid')).toBe('cellInnerDiv');
 });
+
+/** Late November: the avatar column is an empty spacer, and the avatar's link
+ *  moved into the name block, ahead of the name. */
+function avatarInNameBlock() {
+  for (const article of document.querySelectorAll(extract.articleSelector)) {
+    const slot = article.querySelector('[data-post-avatar]')!;
+    const link = slot.querySelector('a')!;
+    slot.innerHTML = '<div class="size-10"></div>';
+    const group = article.querySelector('.x-middot-group')!;
+    const row = document.createElement('div');
+    row.className = '-ms-12 -mb-5 flex min-w-0 items-start gap-2';
+    const holder = document.createElement('div');
+    holder.className = 'relative z-10 shrink-0';
+    holder.append(link);
+    row.append(holder, ...group.childNodes);
+    group.append(row);
+  }
+}
+
+it('reads the author when the avatar link sits in the name block', () => {
+  avatarInNameBlock();
+  const [photo, video] = [...document.querySelectorAll<HTMLElement>(extract.articleSelector)];
+  expect(photo!.querySelector('[data-post-avatar] a')).toBeNull();
+  expect(extract.author(photo!)).toEqual({
+    handle: 'burny_tech',
+    name: 'Burny - Effective Curiosity',
+  });
+  expect(extract.describe(video!, 4, null)).toMatchObject({
+    key: '2117950049422660012',
+    handle: 'CabelaSchmitt',
+    text: 'Fun Lively Rock Christmas Song',
+  });
+});

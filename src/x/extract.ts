@@ -40,10 +40,15 @@ export function author(scope: Element) {
       return { handle, name: container?.querySelector('a span')?.textContent?.trim() || handle };
   }
   // The rebuilt client: the avatar links to the author, and the name block
-  // repeats the link with the display name in it.
-  const avatar = [...scope.querySelectorAll('[data-post-avatar] a[href^="/"]')].find(
-    (link) => !inFrame(link, scope),
-  );
+  // repeats the link with the display name in it. Since late November the
+  // avatar column is an empty spacer and the avatar's link sits in the name
+  // block itself, so the name block's first link to a profile is the author.
+  const ownLink = (selector: string) =>
+    [...scope.querySelectorAll(selector)].find(
+      (link) => !inFrame(link, scope) && handlePattern.test(link.getAttribute('href') ?? ''),
+    );
+  const avatar =
+    ownLink('[data-post-avatar] a[href^="/"]') ?? ownLink('.x-middot-group a[href^="/"]');
   const handle = handlePattern.exec(avatar?.getAttribute('href') ?? '')?.[1];
   if (handle) {
     const named = [...scope.querySelectorAll<HTMLElement>(`.x-middot-group a[href="/${handle}"]`)]
@@ -141,7 +146,7 @@ export function focalArticle(id: string): HTMLElement | null {
 
 /** Where a row sits in its timeline. The rebuilt client positions rows
  *  absolutely and reuses nodes, so document order says nothing; the index does. */
-function rowIndex(article: Element): number | null {
+export function rowIndex(article: Element): number | null {
   const index = cellOf(article)?.getAttribute('data-index');
   return index === null || index === undefined ? null : Number(index);
 }

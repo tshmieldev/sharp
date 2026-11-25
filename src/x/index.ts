@@ -1,4 +1,5 @@
 import './style.css';
+import '../unfry/style.css';
 import { TimelineController } from './controller';
 import { installPostMenu } from './post-menu';
 import { buildId } from '../common/build';

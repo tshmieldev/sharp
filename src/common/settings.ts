@@ -95,6 +95,12 @@ export const Settings = Schema.Struct({
   greyscaleContent: Schema.Boolean,
   youtubeGreyscaleUi: Schema.Boolean,
   youtubeGreyscaleContent: Schema.Boolean,
+  // Unfry: a low-stimulation way through a feed. Every post the filter lets
+  // through arrives locked, and opens only to a held press.
+  unfryX: Schema.Boolean,
+  unfryYoutube: Schema.Boolean,
+  /** How long a press must be held to open a locked post, in milliseconds. */
+  unfryHoldMs: boundedInt(300, 5000),
 });
 export type Settings = typeof Settings.Type;
 export const SettingsPatch = Schema.partial(Settings);
@@ -145,6 +151,9 @@ export const defaults: Settings = {
   greyscaleContent: false,
   youtubeGreyscaleUi: false,
   youtubeGreyscaleContent: false,
+  unfryX: false,
+  unfryYoutube: false,
+  unfryHoldMs: 1000,
 };
 
 /** How much to spend on speed. Bigger batches mean fewer requests, and each
