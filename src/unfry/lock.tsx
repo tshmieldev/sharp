@@ -22,6 +22,34 @@ export type LockProps = {
 /** How long the "keep holding" nudge stays after a press let go too soon. */
 const NUDGE_MS = 900;
 
+/** A held press opens the lock while the finger is still down. Letting go
+ *  then lands on whatever the lock was covering, and the page reads that as a
+ *  click: X opens the post, YouTube plays the video. The release belongs to
+ *  the lock, so the click it makes, and a long press's menu, go nowhere. */
+function swallowRelease() {
+  const kinds = ['click', 'auxclick', 'contextmenu'] as const;
+  const ends = ['pointerup', 'pointercancel'] as const;
+  const swallow = (event: Event) => {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+  let timer = 0;
+  const off = () => {
+    clearTimeout(timer);
+    for (const kind of kinds) window.removeEventListener(kind, swallow, true);
+    for (const end of ends) window.removeEventListener(end, released, true);
+  };
+  // The click follows the release at once; a moment covers a slow device.
+  const released = () => {
+    clearTimeout(timer);
+    timer = window.setTimeout(off, 400);
+  };
+  for (const kind of kinds) window.addEventListener(kind, swallow, true);
+  for (const end of ends) window.addEventListener(end, released, true);
+  // A release that never comes must not leave the page deaf.
+  timer = window.setTimeout(off, 10_000);
+}
+
 export function Lock({
   title,
   facts,
@@ -36,9 +64,10 @@ export function Lock({
   const nudge = useRef(0);
   const unlocked = useRef(false);
 
-  const unlock = () => {
+  const unlock = (by: number | 'key') => {
     if (unlocked.current) return;
     unlocked.current = true;
+    if (by !== 'key') swallowRelease();
     onUnlock();
   };
 
@@ -73,7 +102,7 @@ export function Lock({
       setProgress(ratio);
       if (ratio >= 1) {
         stop();
-        unlock();
+        unlock(pointer);
         return;
       }
       press.current.frame = requestAnimationFrame(tick);
@@ -141,7 +170,8 @@ export function Lock({
         <LockIcon />
       </span>
       <span class="aitf-lock-text">
-        <span class="aitf-lock-title">{title}</span>
+        {/* A cover lies over a thumbnail whose title is printed beside it. */}
+        {layout === 'row' && <span class="aitf-lock-title">{title}</span>}
         {facts.length > 0 && (
           <span class="aitf-lock-facts">
             {facts.map((fact, index) => (

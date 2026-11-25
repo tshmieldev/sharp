@@ -63,7 +63,8 @@ Describe what you want to see — or never see again — in plain language.
   Every post the filter lets through arrives locked: you see who it's from, how
   likely it is to be fine, and whether it's a photo, a video or a long one, and
   you open it by holding for a second. Hidden posts stay hidden. On YouTube this
-  needs no model at all.
+  needs no model at all: every video and Short is locked over its thumbnail,
+  and a locked one plays no preview, on hover or in the phone feed.
 
 ## Private by construction
 

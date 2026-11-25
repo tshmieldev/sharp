@@ -138,7 +138,12 @@ it('locks every video, blocks clicks on a locked one, and lets an opened one go'
   act(() => unfry.start({ youtubeEnabled: true, unfryYoutube: true, unfryHoldMs: 1000 }));
   const items = [...document.querySelectorAll('ytd-rich-item-renderer')];
   expect(items.map((item) => item.hasAttribute('data-aitf-yt-locked'))).toEqual([true, true, true]);
-  expect(items[0]!.querySelector('.aitf-yt-lock .aitf-lock-title')?.textContent).toBe('Video a');
+  // The title is printed beside the thumbnail; the cover only names it aloud.
+  const cover = items[0]!.querySelector('.aitf-yt-lock .aitf-lock')!;
+  expect(cover.getAttribute('aria-label')).toContain('Video a');
+  expect(cover.querySelector('.aitf-lock-title')).toBeNull();
+  expect(cover.textContent).toContain('12:34');
+  expect(cover.textContent).not.toContain('Some Channel');
 
   // A click on a locked card goes nowhere.
   const link = items[0]!.querySelector<HTMLAnchorElement>('#video-title')!;
@@ -157,10 +162,79 @@ it('locks every video, blocks clicks on a locked one, and lets an opened one go'
   time.frame();
   expect(items[0]!.hasAttribute('data-aitf-yt-locked')).toBe(false);
   expect(items[0]!.querySelector('.aitf-yt-lock')).toBeNull();
+  window.dispatchEvent(pointer('pointerup'));
   act(() => unfry.scan());
   expect(items[0]!.hasAttribute('data-aitf-yt-locked')).toBe(false);
   expect(items[1]!.hasAttribute('data-aitf-yt-locked')).toBe(true);
 
   act(() => unfry.stop());
   expect(document.querySelector('[data-aitf-yt-locked], .aitf-yt-lock')).toBeNull();
+});
+
+it('the release that opened a lock clicks nothing; the next click goes through', () => {
+  vi.useFakeTimers();
+  const time = clock();
+  const { button, onUnlock } = lock();
+  const behind = document.createElement('a');
+  document.body.append(behind);
+  const opened = vi.fn();
+  behind.addEventListener('click', opened);
+
+  act(() => {
+    button.dispatchEvent(pointer('pointerdown'));
+  });
+  time.set(1100);
+  time.frame();
+  expect(onUnlock).toHaveBeenCalledTimes(1);
+
+  // Still holding: a long press's menu is the lock's too.
+  const menu = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+  behind.dispatchEvent(menu);
+  expect(menu.defaultPrevented).toBe(true);
+
+  behind.dispatchEvent(pointer('pointerup'));
+  const release = new MouseEvent('click', { bubbles: true, cancelable: true });
+  behind.dispatchEvent(release);
+  expect(release.defaultPrevented).toBe(true);
+  expect(opened).not.toHaveBeenCalled();
+
+  vi.advanceTimersByTime(500);
+  behind.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+  expect(opened).toHaveBeenCalledTimes(1);
+});
+
+it('a locked YouTube card plays no preview, on hover or in the feed', () => {
+  document.body.innerHTML = `<ytd-rich-grid-renderer>${video('a', 'Video a')}</ytd-rich-grid-renderer>`;
+  const card = document.querySelector('ytd-rich-item-renderer')!;
+  const media = document.createElement('video');
+  card.append(media);
+  const thumb = card.querySelector('ytd-thumbnail')!;
+  const hovered = vi.fn();
+  thumb.addEventListener('mouseover', hovered);
+  const pause = vi.spyOn(media, 'pause').mockImplementation(() => {});
+
+  const unfry = new UnfryYouTube();
+  act(() => unfry.start({ youtubeEnabled: true, unfryYoutube: true, unfryHoldMs: 1000 }));
+  thumb.querySelector('.aitf-lock')!.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+  expect(hovered).not.toHaveBeenCalled();
+  media.dispatchEvent(new Event('play'));
+  expect(pause).toHaveBeenCalledTimes(1);
+
+  act(() => unfry.stop());
+  thumb.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+  expect(hovered).toHaveBeenCalledTimes(1);
+  media.dispatchEvent(new Event('play'));
+  expect(pause).toHaveBeenCalledTimes(1);
+});
+
+it('locks a Short in a shelf as one card', () => {
+  document.body.innerHTML = `<grid-shelf-view-model>
+    <ytm-shorts-lockup-view-model-v2><ytm-shorts-lockup-view-model>
+      <a href="/shorts/xyz"><yt-thumbnail-view-model><img></yt-thumbnail-view-model></a>
+      <h3>A short</h3>
+    </ytm-shorts-lockup-view-model></ytm-shorts-lockup-view-model-v2>
+  </grid-shelf-view-model>`;
+  expect(cards().map((card) => [card.element.tagName.toLowerCase(), card.key])).toEqual([
+    ['ytm-shorts-lockup-view-model-v2', '/shorts/xyz'],
+  ]);
 });

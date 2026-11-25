@@ -18,6 +18,10 @@ const cardSelector = [
   'ytm-video-with-context-renderer',
   'ytm-compact-video-renderer',
   'ytm-media-item',
+  // Shorts in a shelf, on both sites, and the older desktop reel.
+  'ytm-shorts-lockup-view-model-v2',
+  'ytm-shorts-lockup-view-model',
+  'ytd-reel-item-renderer',
 ].join(', ');
 const thumbSelector = [
   'ytd-thumbnail',
@@ -33,6 +37,16 @@ const channelSelector =
 const durationSelector =
   'ytd-thumbnail-overlay-time-status-renderer #text, badge-shape .ytBadgeShapeText, .yt-badge-shape__text, ytm-thumbnail-overlay-time-status-renderer';
 const LOCKED = 'data-aitf-yt-locked';
+/** What YouTube reads to start a hover preview: the video playing over the
+ *  thumbnail, picture and all. A locked card hears none of them. */
+const HOVER_EVENTS = [
+  'mouseover',
+  'mouseenter',
+  'mousemove',
+  'pointerover',
+  'pointerenter',
+  'pointermove',
+] as const;
 const SCAN_THROTTLE = 150;
 const POLL_INTERVAL = 1500;
 
@@ -88,6 +102,8 @@ export class UnfryYouTube {
     this.pollTimer = window.setInterval(() => this.scan(), POLL_INTERVAL);
     document.addEventListener('click', this.onClick, true);
     document.addEventListener('auxclick', this.onClick, true);
+    for (const kind of HOVER_EVENTS) window.addEventListener(kind, this.onHover, true);
+    document.addEventListener('play', this.onPlay, true);
     this.scan();
   }
 
@@ -99,6 +115,8 @@ export class UnfryYouTube {
     window.clearInterval(this.pollTimer);
     document.removeEventListener('click', this.onClick, true);
     document.removeEventListener('auxclick', this.onClick, true);
+    for (const kind of HOVER_EVENTS) window.removeEventListener(kind, this.onHover, true);
+    document.removeEventListener('play', this.onPlay, true);
     for (const [element, lock] of this.locks) {
       lock.down();
       element.removeAttribute(LOCKED);
@@ -125,6 +143,18 @@ export class UnfryYouTube {
     card.querySelector<HTMLElement>('.aitf-lock')?.focus({ preventScroll: true });
   };
 
+  private onHover = (event: Event) => {
+    const target = event.target;
+    if (target instanceof Element && target.closest(`[${LOCKED}]`)) event.stopPropagation();
+  };
+
+  /** The phone site starts a card's preview as it scrolls into view. Hidden is
+   *  not enough: it would still stream, and may not be muted. */
+  private onPlay = (event: Event) => {
+    const target = event.target;
+    if (target instanceof HTMLMediaElement && target.closest(`[${LOCKED}]`)) target.pause();
+  };
+
   scan() {
     const settings = this.settings;
     if (!this.running || !settings) return;
@@ -140,8 +170,8 @@ export class UnfryYouTube {
   private lock(card: Card, settings: UnfrySettings) {
     const thumb = card.element.querySelector<HTMLElement>(thumbSelector);
     if (!thumb) return;
-    const { title, channel, duration } = describe(card.element);
-    const signature = `${card.key}:${title}:${channel}:${duration}:${settings.unfryHoldMs}`;
+    const { title, duration } = describe(card.element);
+    const signature = `${card.key}:${title}:${duration}:${settings.unfryHoldMs}`;
     const existing = this.locks.get(card.element);
     if (existing?.signature === signature && card.element.querySelector('.aitf-yt-lock')) return;
     existing?.down();
@@ -152,8 +182,9 @@ export class UnfryYouTube {
     card.element.setAttribute(LOCKED, '');
     const unmount = mountLock(root, {
       layout: 'cover',
+      // The title and channel are printed beside the thumbnail already.
       title: title || 'Video',
-      facts: [channel, duration].filter(Boolean),
+      facts: duration ? [duration] : [],
       holdMs: settings.unfryHoldMs,
       onUnlock: () => {
         this.unlocked.add(card.key);

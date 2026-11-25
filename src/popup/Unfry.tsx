@@ -14,7 +14,7 @@ export function UnfryGroup({ settings, update, site }: SettingsEditor & { site: 
         label="Low-stimulation mode"
         hint={
           on
-            ? `Every ${what} that gets through is locked until you hold it.`
+            ? `Every ${what} ${site === 'x' ? 'that gets through ' : ''}is locked until you hold it.`
             : `Lock each ${what} behind a held press.`
         }
         checked={on}
@@ -32,7 +32,8 @@ export function UnfryGroup({ settings, update, site }: SettingsEditor & { site: 
             onChange={(value) => update('unfryHoldMs', Math.round(value))}
           />
           <p class="note tight">
-            Hidden {what}s stay hidden. Opened locks stay open until the tab is closed.
+            {site === 'x' ? 'Hidden posts stay hidden. ' : 'A locked video plays no preview. '}
+            Opened locks stay open until the page is reloaded.
           </p>
         </>
       )}
